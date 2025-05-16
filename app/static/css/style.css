@@ -2,125 +2,158 @@
 
 /* Smooth transitions */
 .transition-all {
-    transition: all 0.3s ease-in-out;
+    transition: all 0.2s ease-in-out;
 }
 
 /* Custom scrollbar */
 ::-webkit-scrollbar {
-    width: 8px;
+    width: 6px;
 }
 
 ::-webkit-scrollbar-track {
-    background: #1f2937;
+    background: #000000;
 }
 
 ::-webkit-scrollbar-thumb {
-    background: #3b82f6;
-    border-radius: 4px;
+    background: #1F2937;
+    border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-    background: #2563eb;
+    background: #374151;
 }
 
-/* Match card hover effect */
-.match-card {
-    transition: transform 0.2s ease-in-out;
+/* Search form */
+.search-form {
+    max-width: 400px;
+    margin: 0 auto;
+    background-color: #000000;
+    padding: 1.5rem;
+    border-radius: 0.75rem;
+    border: 1px solid #1F2937;
 }
 
-.match-card:hover {
-    transform: translateY(-2px);
+.form-group {
+    margin-bottom: 1rem;
 }
 
-/* Performance score animation */
-@keyframes scorePulse {
-    0% { transform: scale(1); }
-    50% { transform: scale(1.05); }
-    100% { transform: scale(1); }
+.form-group label {
+    display: block;
+    margin-bottom: 0.5rem;
+    color: #6B7280;
+    font-size: 0.875rem;
 }
 
-.score-animation {
-    animation: scorePulse 1s ease-in-out;
+.form-group input,
+.form-group select {
+    width: 100%;
+    padding: 0.625rem;
+    border: 1px solid #1F2937;
+    border-radius: 0.5rem;
+    background-color: #111827;
+    color: #E5E7EB;
+    font-size: 0.875rem;
 }
 
-/* Loading spinner */
-@keyframes spin {
-    to { transform: rotate(360deg); }
+.form-group input:focus,
+.form-group select:focus {
+    outline: none;
+    border-color: #374151;
 }
 
-.animate-spin {
-    animation: spin 1s linear infinite;
+.btn {
+    display: inline-block;
+    padding: 0.625rem 1.25rem;
+    background-color: #1F2937;
+    color: #E5E7EB;
+    border: none;
+    border-radius: 0.5rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
 }
 
-/* Stat card hover effect */
-.stat-card {
-    transition: all 0.2s ease-in-out;
-}
-
-.stat-card:hover {
+.btn:hover {
     background-color: #374151;
 }
 
-/* Improvement suggestion list */
-.improvement-list li {
-    position: relative;
-    padding-left: 1.5rem;
+/* Loading spinner */
+.loading-spinner {
+    display: inline-block;
+    width: 2rem;
+    height: 2rem;
+    border: 2px solid #1F2937;
+    border-top-color: #6B7280;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
 }
 
-.improvement-list li::before {
-    content: "•";
-    position: absolute;
-    left: 0.5rem;
-    color: #3b82f6;
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
 }
 
-/* Match timeline visualization */
-.timeline-bar {
-    height: 4px;
-    background: #374151;
-    border-radius: 2px;
-    overflow: hidden;
+/* Stat cards */
+.stat-card {
+    background-color: #000000;
+    padding: 1rem;
+    border-radius: 0.5rem;
+    text-align: center;
+    border: 1px solid #1F2937;
 }
 
-.timeline-segment {
-    height: 100%;
-    transition: width 0.3s ease-in-out;
+.stat-card h3 {
+    color: #6B7280;
+    font-size: 0.75rem;
+    margin-bottom: 0.25rem;
 }
 
-/* Champion icon styling */
+.stat-card p {
+    color: #E5E7EB;
+    font-size: 1.25rem;
+    font-weight: 500;
+}
+
+/* Match cards */
+.match-card {
+    background-color: #000000;
+    padding: 1rem;
+    border-radius: 0.5rem;
+    cursor: pointer;
+    transition: all 0.2s;
+    border: 1px solid #1F2937;
+}
+
+.match-card:hover {
+    background-color: #111827;
+}
+
 .champion-icon {
+    width: 2.5rem;
+    height: 2.5rem;
     border-radius: 50%;
-    border: 2px solid #3b82f6;
-    transition: transform 0.2s ease-in-out;
+    object-fit: cover;
+    border: 1px solid #1F2937;
 }
 
-.champion-icon:hover {
-    transform: scale(1.1);
-}
-
-/* Win/Loss indicator */
 .win-indicator {
-    position: relative;
-    padding-left: 1.5rem;
+    display: inline-block;
+    padding: 0.25rem 0.5rem;
+    border-radius: 0.25rem;
+    font-size: 0.75rem;
+    font-weight: 500;
 }
 
-.win-indicator::before {
-    content: "";
-    position: absolute;
-    left: 0;
-    top: 50%;
-    transform: translateY(-50%);
-    width: 0.75rem;
-    height: 0.75rem;
-    border-radius: 50%;
+.win-indicator.win {
+    background-color: #064E3B;
+    color: #6EE7B7;
 }
 
-.win-indicator.win::before {
-    background-color: #10b981;
-}
-
-.win-indicator.loss::before {
-    background-color: #ef4444;
+.win-indicator.loss {
+    background-color: #7F1D1D;
+    color: #FCA5A5;
 }
 
 /* Responsive adjustments */
@@ -131,6 +164,10 @@
     }
     
     .stat-card {
-        padding: 1rem;
+        padding: 0.75rem;
+    }
+    
+    .match-card {
+        padding: 0.75rem;
     }
 } 

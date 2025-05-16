@@ -3,105 +3,62 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>JaxStats - League of Legends Stats Analysis</title>
+    <title>JaxStats - League of Legends Stats</title>
     <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', path='css/style.css') }}">
 </head>
-<body class="bg-gray-900 text-white">
+<body class="bg-black text-white">
     <div class="container mx-auto px-4 py-8">
         <header class="text-center mb-12">
-            <h1 class="text-4xl font-bold text-blue-500 mb-4">JaxStats</h1>
-            <p class="text-gray-400">League of Legends Performance Analysis</p>
+            <h1 class="text-4xl font-bold text-gray-200 mb-2">JaxStats</h1>
+            <p class="text-gray-500">League of Legends Performance</p>
         </header>
 
-        <!-- Debug Panel Toggle -->
-        <div class="fixed top-4 right-4 z-50">
-            <button id="debugToggle" class="bg-gray-800 text-white px-4 py-2 rounded-lg hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500">
-                Debug Panel
-            </button>
-        </div>
-
-        <!-- Debug Panel -->
-        <div id="debugPanel" class="fixed top-0 right-0 w-1/3 h-full bg-gray-800 shadow-lg transform translate-x-full transition-transform duration-300 ease-in-out z-40 overflow-hidden flex flex-col">
-            <div class="debug-header">
-                <h2 class="text-xl font-bold text-blue-500">Debug Panel</h2>
-                <button id="clearLogs" class="text-gray-400 hover:text-white">Clear Logs</button>
+        <!-- Search Form -->
+        <form id="summonerForm" class="search-form">
+            <div class="form-group">
+                <label for="summonerName">Summoner Name</label>
+                <input type="text" id="summonerName" name="summonerName" required>
             </div>
-            <div class="flex-1 overflow-y-auto p-4">
-                <div id="debugLogs" class="space-y-4"></div>
+            <div class="form-group">
+                <label for="region">Region</label>
+                <select id="region" name="region" required>
+                    <option value="na1">North America</option>
+                    <option value="euw1">Europe West</option>
+                    <option value="eun1">Europe Nordic</option>
+                    <option value="kr">Korea</option>
+                </select>
             </div>
-        </div>
+            <button type="submit" class="btn w-full">Search</button>
+        </form>
 
-        <div class="max-w-2xl mx-auto bg-gray-800 rounded-lg shadow-lg p-6 mb-8">
-            <form id="summonerForm" class="space-y-4">
-                <div>
-                    <label for="summonerName" class="block text-sm font-medium text-gray-300">Riot ID</label>
-                    <input type="text" id="summonerName" name="summonerName" required
-                           placeholder="GameName#TAG"
-                           class="mt-1 block w-full rounded-md bg-gray-700 border-gray-600 text-white focus:border-blue-500 focus:ring-blue-500">
-                    <p class="mt-1 text-sm text-gray-400">Enter your Riot ID in the format: GameName#TAG (e.g. aphae#raph)</p>
-                </div>
-                <div>
-                    <label for="region" class="block text-sm font-medium text-gray-300">Region</label>
-                    <select id="region" name="region" required
-                            class="mt-1 block w-full rounded-md bg-gray-700 border-gray-600 text-white focus:border-blue-500 focus:ring-blue-500">
-                        <optgroup label="Americas">
-                            <option value="na1">North America</option>
-                            <option value="br1">Brazil</option>
-                            <option value="la1">Latin America North</option>
-                            <option value="la2">Latin America South</option>
-                        </optgroup>
-                        <optgroup label="Europe">
-                            <option value="euw1">Europe West</option>
-                            <option value="eun1">Europe Nordic & East</option>
-                            <option value="tr1">Turkey</option>
-                            <option value="ru">Russia</option>
-                        </optgroup>
-                        <optgroup label="Asia">
-                            <option value="kr">Korea</option>
-                            <option value="jp1">Japan</option>
-                            <option value="oc1">Oceania</option>
-                        </optgroup>
-                    </select>
-                    <p class="mt-1 text-sm text-gray-400">Select the region closest to you for better performance</p>
-                </div>
-                <button type="submit"
-                        class="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-gray-800">
-                    Analyze
-                </button>
-            </form>
-        </div>
-
-        <div id="loading" class="hidden text-center">
-            <div class="inline-block animate-spin rounded-full h-8 w-8 border-4 border-blue-500 border-t-transparent"></div>
-            <p class="mt-2 text-gray-400">Analyzing summoner data...</p>
+        <div id="loading" class="hidden text-center py-8">
+            <div class="loading-spinner"></div>
         </div>
 
         <div id="results" class="hidden space-y-8">
             <!-- Overall Stats -->
-            <div class="bg-gray-800 rounded-lg shadow-lg p-6">
-                <h2 class="text-2xl font-bold text-blue-500 mb-4">Overall Statistics</h2>
+            <div class="bg-gray-900/50 rounded-lg p-6">
+                <h2 class="text-xl font-medium text-gray-200 mb-4">Statistics</h2>
                 <div id="overallStats" class="grid grid-cols-2 md:grid-cols-4 gap-4"></div>
             </div>
 
             <!-- Match History -->
-            <div class="bg-gray-800 rounded-lg shadow-lg p-6">
-                <h2 class="text-2xl font-bold text-blue-500 mb-4">Recent Matches</h2>
+            <div class="bg-gray-900/50 rounded-lg p-6">
+                <h2 class="text-xl font-medium text-gray-200 mb-4">Recent Matches</h2>
                 <div id="matchList" class="space-y-4"></div>
             </div>
 
             <!-- Match Details -->
-            <div id="matchDetails" class="bg-gray-800 rounded-lg shadow-lg p-6 hidden">
-                <h2 class="text-2xl font-bold text-blue-500 mb-4">Match Analysis</h2>
+            <div id="matchDetails" class="bg-gray-900/50 rounded-lg p-6 hidden">
+                <h2 class="text-xl font-medium text-gray-200 mb-4">Match Details</h2>
                 <div class="space-y-6">
-                    <div id="performanceScore" class="text-center"></div>
                     <div id="matchStats" class="grid grid-cols-1 md:grid-cols-2 gap-6"></div>
-                    <div id="improvementSuggestions" class="mt-6"></div>
                 </div>
             </div>
         </div>
 
-        <div id="error" class="hidden bg-red-900 text-white p-4 rounded-lg mt-4"></div>
+        <div id="error" class="hidden bg-red-900/30 text-red-200 p-4 rounded-lg mt-4"></div>
     </div>
 
     <script src="{{ url_for('static', path='js/main.js') }}"></script>
