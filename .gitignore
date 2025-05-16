@@ -1,0 +1,49 @@
+# Python virtual environments
+venv/
+.env/
+.venv/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+
+# VSCode settings
+.vscode/
+
+# Model files and HuggingFace cache
+*.bin
+*.pt
+*.ckpt
+*.h5
+*.onnx
+*.tflite
+*.pb
+*.safetensors
+
+# HuggingFace transformers cache and models
+datasets/
+models/
+cache/
+.huggingface/
+~/.cache/huggingface/
+~/.cache/torch/
+
+# System files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Environment variables
+.env
+.env.*
+
+# Ignore data and output folders (if you want)
+data/
+output/

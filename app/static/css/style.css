@@ -1,0 +1,136 @@
+/* Custom styles to complement Tailwind CSS */
+
+/* Smooth transitions */
+.transition-all {
+    transition: all 0.3s ease-in-out;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+    width: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: #1f2937;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #3b82f6;
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #2563eb;
+}
+
+/* Match card hover effect */
+.match-card {
+    transition: transform 0.2s ease-in-out;
+}
+
+.match-card:hover {
+    transform: translateY(-2px);
+}
+
+/* Performance score animation */
+@keyframes scorePulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.05); }
+    100% { transform: scale(1); }
+}
+
+.score-animation {
+    animation: scorePulse 1s ease-in-out;
+}
+
+/* Loading spinner */
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+.animate-spin {
+    animation: spin 1s linear infinite;
+}
+
+/* Stat card hover effect */
+.stat-card {
+    transition: all 0.2s ease-in-out;
+}
+
+.stat-card:hover {
+    background-color: #374151;
+}
+
+/* Improvement suggestion list */
+.improvement-list li {
+    position: relative;
+    padding-left: 1.5rem;
+}
+
+.improvement-list li::before {
+    content: "•";
+    position: absolute;
+    left: 0.5rem;
+    color: #3b82f6;
+}
+
+/* Match timeline visualization */
+.timeline-bar {
+    height: 4px;
+    background: #374151;
+    border-radius: 2px;
+    overflow: hidden;
+}
+
+.timeline-segment {
+    height: 100%;
+    transition: width 0.3s ease-in-out;
+}
+
+/* Champion icon styling */
+.champion-icon {
+    border-radius: 50%;
+    border: 2px solid #3b82f6;
+    transition: transform 0.2s ease-in-out;
+}
+
+.champion-icon:hover {
+    transform: scale(1.1);
+}
+
+/* Win/Loss indicator */
+.win-indicator {
+    position: relative;
+    padding-left: 1.5rem;
+}
+
+.win-indicator::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 0.75rem;
+    height: 0.75rem;
+    border-radius: 50%;
+}
+
+.win-indicator.win::before {
+    background-color: #10b981;
+}
+
+.win-indicator.loss::before {
+    background-color: #ef4444;
+}
+
+/* Responsive adjustments */
+@media (max-width: 640px) {
+    .container {
+        padding-left: 1rem;
+        padding-right: 1rem;
+    }
+    
+    .stat-card {
+        padding: 1rem;
+    }
+} 
