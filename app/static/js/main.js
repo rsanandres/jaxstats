@@ -35,7 +35,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 body: JSON.stringify({
                     summoner_name: summonerName,
                     region: region,
-                    match_count: 5
+                    match_count: 20
                 }),
             });
 
