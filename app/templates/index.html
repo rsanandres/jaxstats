@@ -43,6 +43,33 @@
                 <div id="overallStats" class="grid grid-cols-2 md:grid-cols-4 gap-4"></div>
             </div>
 
+            <!-- Champion Stats -->
+            <div class="bg-gray-900/50 rounded-lg p-6">
+                <h2 class="text-xl font-medium text-gray-200 mb-4">Champion Statistics</h2>
+                <div id="championStats" class="space-y-4">
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full">
+                            <thead>
+                                <tr class="text-left text-sm text-gray-500">
+                                    <th class="p-2">Champion</th>
+                                    <th class="p-2">Games</th>
+                                    <th class="p-2">Win Rate</th>
+                                    <th class="p-2">KDA</th>
+                                    <th class="p-2">Avg Kills</th>
+                                    <th class="p-2">Avg Deaths</th>
+                                    <th class="p-2">Avg Assists</th>
+                                    <th class="p-2">Avg Damage</th>
+                                    <th class="p-2">Avg Gold</th>
+                                    <th class="p-2">Avg Vision</th>
+                                </tr>
+                            </thead>
+                            <tbody id="championStatsBody">
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
             <!-- Match History -->
             <div class="bg-gray-900/50 rounded-lg p-6">
                 <h2 class="text-xl font-medium text-gray-200 mb-4">Recent Matches</h2>

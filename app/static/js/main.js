@@ -7,6 +7,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const matchList = document.getElementById('matchList');
     const matchDetails = document.getElementById('matchDetails');
     const matchStats = document.getElementById('matchStats');
+    const championStatsBody = document.getElementById('championStatsBody');
 
     // Set default summoner
     const defaultSummoner = "aphae#raph";
@@ -46,6 +47,8 @@ document.addEventListener('DOMContentLoaded', () => {
             const data = await response.json();
             displayOverallStats(data.overall_stats);
             displayMatchList(data.match_analyses);
+            displayChampionStats(data.champion_stats);
+
             results.classList.remove('hidden');
         } catch (err) {
             error.textContent = err.message;
@@ -152,6 +155,34 @@ document.addEventListener('DOMContentLoaded', () => {
                 </div>
             `;
         }).join('');
+    }
+
+    function displayChampionStats(stats) {
+        if (!stats) return;
+
+        championStatsBody.innerHTML = Object.entries(stats)
+            .sort((a, b) => b[1].games_played - a[1].games_played) // Sort by games played
+            .map(([champion, data]) => `
+                <tr class="border-t border-gray-800 hover:bg-gray-800/50">
+                    <td class="p-2">
+                        <div class="flex items-center space-x-2">
+                            <img src="https://ddragon.leagueoflegends.com/cdn/13.24.1/img/champion/${champion}.png"
+                                 alt="${champion}"
+                                 class="w-8 h-8 rounded">
+                            <span class="text-gray-200">${champion}</span>
+                        </div>
+                    </td>
+                    <td class="p-2 text-gray-200">${data.games_played}</td>
+                    <td class="p-2 text-gray-200">${data.win_rate.toFixed(1)}%</td>
+                    <td class="p-2 text-gray-200">${data.kda.toFixed(2)}</td>
+                    <td class="p-2 text-gray-200">${data.avg_kills.toFixed(1)}</td>
+                    <td class="p-2 text-gray-200">${data.avg_deaths.toFixed(1)}</td>
+                    <td class="p-2 text-gray-200">${data.avg_assists.toFixed(1)}</td>
+                    <td class="p-2 text-gray-200">${Math.round(data.avg_damage).toLocaleString()}</td>
+                    <td class="p-2 text-gray-200">${Math.round(data.avg_gold).toLocaleString()}</td>
+                    <td class="p-2 text-gray-200">${Math.round(data.avg_vision)}</td>
+                </tr>
+            `).join('');
     }
 
     window.toggleMatchDropdown = function(dropdownId) {
