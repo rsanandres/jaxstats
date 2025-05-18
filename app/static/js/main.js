@@ -17,26 +17,47 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('summonerName').value = defaultSummoner;
     document.getElementById('region').value = defaultRegion;
 
-    form.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const summonerName = document.getElementById('summonerName').value;
-        const region = document.getElementById('region').value;
+    // Add refresh button to the form
+    const refreshButton = document.createElement('button');
+    refreshButton.type = 'button';
+    refreshButton.className = 'px-4 py-2 bg-gray-700 text-gray-200 rounded hover:bg-gray-600 transition-colors flex items-center space-x-2';
+    refreshButton.innerHTML = `
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+        </svg>
+        <span>Refresh Data</span>
+    `;
+    form.appendChild(refreshButton);
+
+    // Add loading spinner component
+    const loadingSpinner = document.createElement('div');
+    loadingSpinner.className = 'hidden fixed bottom-4 right-4 bg-gray-800 rounded-lg shadow-lg p-4 flex items-center space-x-3';
+    loadingSpinner.innerHTML = `
+        <div class="animate-spin rounded-full h-5 w-5 border-b-2 border-gray-200"></div>
+        <span class="text-gray-200">Updating data...</span>
+    `;
+    document.body.appendChild(loadingSpinner);
+
+    let currentSummoner = defaultSummoner;
+    let currentRegion = defaultRegion;
+    let isRefreshing = false;
+
+    async function fetchData(useCache = true) {
+        if (isRefreshing) return;
+        isRefreshing = true;
 
         try {
-            loading.classList.remove('hidden');
-            results.classList.add('hidden');
-            error.classList.add('hidden');
-            matchDetails.classList.add('hidden');
-
+            // First request with cached data
             const response = await fetch('/api/analyze', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({
-                    summoner_name: summonerName,
-                    region: region,
-                    match_count: 20
+                    summoner_name: currentSummoner,
+                    region: currentRegion,
+                    match_count: 20,
+                    use_cache: true  // Always use cache first
                 }),
             });
 
@@ -45,17 +66,66 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             const data = await response.json();
+            
+            // Show initial data from cache immediately
             displayOverallStats(data.overall_stats);
             displayMatchList(data.match_analyses);
             displayChampionStats(data.champion_stats);
-
             results.classList.remove('hidden');
+
+            // If we're not using cache or have new matches to load, fetch fresh data in background
+            if (!useCache || data.match_count.new > 0) {
+                loadingSpinner.classList.remove('hidden');
+
+                // Fetch fresh data in the background
+                const freshResponse = await fetch(`/api/analyze/${currentSummoner}?region=${currentRegion}&match_count=20&use_cache=false`);
+                if (freshResponse.ok) {
+                    const freshData = await freshResponse.json();
+                    
+                    // Update UI with fresh data
+                    displayOverallStats(freshData.overall_stats);
+                    displayMatchList(freshData.match_analyses);
+                    displayChampionStats(freshData.champion_stats);
+
+                    // Show success message
+                    const successMessage = document.createElement('div');
+                    successMessage.className = 'fixed bottom-4 right-4 bg-green-800 text-gray-200 rounded-lg shadow-lg p-4 flex items-center space-x-3';
+                    successMessage.innerHTML = `
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                        </svg>
+                        <span>Data updated successfully</span>
+                    `;
+                    document.body.appendChild(successMessage);
+                    setTimeout(() => successMessage.remove(), 3000);
+                }
+            }
+
         } catch (err) {
             error.textContent = err.message;
             error.classList.remove('hidden');
         } finally {
             loading.classList.add('hidden');
+            loadingSpinner.classList.add('hidden');
+            isRefreshing = false;
         }
+    }
+
+    form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        currentSummoner = document.getElementById('summonerName').value;
+        currentRegion = document.getElementById('region').value;
+
+        loading.classList.remove('hidden');
+        results.classList.add('hidden');
+        error.classList.add('hidden');
+        matchDetails.classList.add('hidden');
+
+        await fetchData(true);
+    });
+
+    refreshButton.addEventListener('click', async () => {
+        await fetchData(false);
     });
 
     function displayOverallStats(stats) {
