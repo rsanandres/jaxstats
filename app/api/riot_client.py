@@ -7,13 +7,20 @@ from pathlib import Path
 import asyncio
 from fastapi import HTTPException
 
-load_dotenv()
+# Try to load .env file from project root
+env_path = Path(__file__).parent.parent.parent / '.env'
+load_dotenv(dotenv_path=env_path)
 
 class RiotAPIClient:
     def __init__(self):
         self.api_key = os.getenv("RIOT_API_KEY")
         if not self.api_key:
-            raise ValueError("RIOT_API_KEY environment variable is not set")
+            raise ValueError(
+                "RIOT_API_KEY environment variable is not set. "
+                "Please set it using either:\n"
+                "1. Create a .env file in the project root with RIOT_API_KEY=your_key\n"
+                "2. Run 'export RIOT_API_KEY=your_key' in your terminal"
+            )
         
         # Create data directory if it doesn't exist
         self.data_dir = Path("data")

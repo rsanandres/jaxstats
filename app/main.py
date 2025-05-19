@@ -118,14 +118,14 @@ async def get_debug_logs():
 async def analyze_summoner_post(request: SummonerRequest):
     """Analyze a summoner's match history and provide insights (POST endpoint)."""
     try:
-        return await analyze_summoner(request.summoner_name, request.region, request.match_count)
+        return await analyze_summoner(request.summoner_name, request.region, request.match_count, use_cache=True)
     except Exception as e:
         error_msg = f"Error analyzing summoner: {str(e)}"
         log_debug("ERROR", error_msg, sys.exc_info())
         raise HTTPException(status_code=500, detail=error_msg)
 
 @app.get("/api/analyze/{summoner_name}")
-async def analyze_summoner(summoner_name: str, region: str = "na1", match_count: int = 5):
+async def analyze_summoner(summoner_name: str, region: str = "na1", match_count: int = 5, use_cache: bool = True):
     """Analyze a summoner's match history and provide insights (GET endpoint)."""
     try:
         # Validate match_count
@@ -157,6 +157,101 @@ async def analyze_summoner(summoner_name: str, region: str = "na1", match_count:
         
         # Get match details for each match
         matches_data = []
+        cached_matches = []
+        new_matches = []
+        
+        for match_id in match_ids:
+            # Try to get cached match data first
+            cached_data = riot_client._load_match_data(match_id)
+            if cached_data and use_cache:
+                cached_matches.append(cached_data)
+            else:
+                log_debug("INFO", f"Fetching details for match {match_id}")
+                match_data = await riot_client.get_match_details(match_id, region)
+                if match_data:
+                    new_matches.append(match_data)
+        
+        # Combine cached and new matches
+        matches_data = cached_matches + new_matches
+        
+        # If we have no matches at all, return early
+        if not matches_data:
+            return {
+                "summoner_name": summoner.get("name", "Unknown"),
+                "summoner_level": summoner.get("summonerLevel", 0),
+                "profile_icon_id": summoner.get("profileIconId", 0),
+                "overall_stats": {},
+                "match_analyses": [],
+                "champion_stats": {},
+                "match_count": {
+                    "requested": match_count,
+                    "retrieved": len(match_ids),
+                    "analyzed": 0,
+                    "cached": 0,
+                    "new": 0
+                }
+            }
+        
+        # Analyze matches
+        stats_analyzer = StatsAnalyzer()
+        stats_analyzer.puuid = puuid
+        for match in matches_data:
+            stats_analyzer.add_match(match)
+        
+        overall_stats = stats_analyzer.get_player_stats()
+        match_analyses = [stats_analyzer.get_match_details(m.get('metadata', {}).get('matchId', '')) for m in matches_data]
+        match_analyses = [m for m in match_analyses if m]
+        champion_stats = stats_analyzer.get_champion_stats()
+        
+        return {
+            "summoner_name": summoner.get("name", "Unknown"),
+            "summoner_level": summoner.get("summonerLevel", 0),
+            "profile_icon_id": summoner.get("profileIconId", 0),
+            "overall_stats": overall_stats,
+            "match_analyses": match_analyses,
+            "champion_stats": champion_stats,
+            "match_count": {
+                "requested": match_count,
+                "retrieved": len(match_ids),
+                "analyzed": len(match_analyses),
+                "cached": len(cached_matches),
+                "new": len(new_matches)
+            }
+        }
+    except Exception as e:
+        error_msg = f"Error analyzing summoner: {str(e)}"
+        log_debug("ERROR", error_msg, sys.exc_info())
+        raise HTTPException(status_code=500, detail=error_msg)
+
+@app.get("/api/champion-stats/{summoner_name}")
+async def get_champion_stats(summoner_name: str, region: str = "na1", match_count: int = 20):
+    """Get champion statistics for a summoner."""
+    try:
+        # Validate match_count
+        if match_count < 1 or match_count > 20:
+            error_msg = "Match count must be between 1 and 20"
+            log_debug("ERROR", error_msg)
+            raise ValueError(error_msg)
+            
+        # Split the summoner name into game name and tag line
+        if '#' not in summoner_name:
+            error_msg = "Summoner name must be in the format 'GameName#TAG'"
+            log_debug("ERROR", error_msg)
+            raise ValueError(error_msg)
+            
+        game_name, tag_line = summoner_name.split('#')
+        
+        # Get account info using Riot ID
+        log_debug("INFO", f"Fetching account info for {game_name}#{tag_line} in {region}")
+        account = await riot_client.get_account_by_riot_id(game_name, tag_line, region)
+        puuid = account['puuid']
+        
+        # Get match history with specified count
+        log_debug("INFO", f"Fetching {match_count} matches for PUUID {puuid}")
+        match_ids = await riot_client.get_match_history(puuid, region, count=match_count)
+        
+        # Get match details for each match
+        matches_data = []
         for match_id in match_ids:
             log_debug("INFO", f"Fetching details for match {match_id}")
             match_data = await riot_client.get_match_details(match_id, region)
@@ -167,30 +262,23 @@ async def analyze_summoner(summoner_name: str, region: str = "na1", match_count:
         
         # Analyze matches
         stats_analyzer = StatsAnalyzer()
-        stats_analyzer.puuid = puuid  # Set puuid directly from account info
-        log_debug("INFO", f"Set StatsAnalyzer.puuid = {puuid}")
+        stats_analyzer.puuid = puuid
         for match in matches_data:
             stats_analyzer.add_match(match)
-            log_debug("INFO", f"Added match {match.get('metadata', {}).get('matchId', 'unknown')} to analyzer")
         
-        overall_stats = stats_analyzer.get_player_stats()
-        match_analyses = [stats_analyzer.get_match_details(m.get('metadata', {}).get('matchId', '')) for m in matches_data]
-        match_analyses = [m for m in match_analyses if m]
+        champion_stats = stats_analyzer.get_champion_stats()
         
         return {
-            "summoner_name": summoner.get("name", "Unknown"),
-            "summoner_level": summoner.get("summonerLevel", 0),
-            "profile_icon_id": summoner.get("profileIconId", 0),
-            "overall_stats": overall_stats,
-            "match_analyses": match_analyses,
+            "summoner_name": summoner_name,
+            "champion_stats": champion_stats,
             "match_count": {
                 "requested": match_count,
                 "retrieved": len(match_ids),
-                "analyzed": len(match_analyses)
+                "analyzed": len(matches_data)
             }
         }
     except Exception as e:
-        error_msg = f"Error analyzing summoner: {str(e)}"
+        error_msg = f"Error getting champion stats: {str(e)}"
         log_debug("ERROR", error_msg, sys.exc_info())
         raise HTTPException(status_code=500, detail=error_msg)
 

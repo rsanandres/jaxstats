@@ -22,10 +22,21 @@ A Python-based League of Legends stats analysis tool that uses Jax for machine l
    ```bash
    pip install -r requirements.txt
    ```
-4. Create a `.env` file in the root directory and add your Riot Games API key:
+4. Set up your Riot Games API key using one of these methods:
+
+   **Option 1 - Using .env file:**
+   Create a `.env` file in the root directory and add your Riot Games API key:
    ```
    RIOT_API_KEY=your_api_key_here
    ```
+
+   **Option 2 - Using export command:**
+   Set the environment variable in your terminal:
+   ```bash
+   export RIOT_API_KEY=your_api_key_here
+   ```
+   Note: This method only persists for your current terminal session.
+
 5. Run the application:
    ```bash
    uvicorn app.main:app --reload

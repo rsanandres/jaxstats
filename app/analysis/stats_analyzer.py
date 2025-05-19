@@ -185,8 +185,7 @@ class StatsAnalyzer:
         # Set PUUID if not set and we find it in the participants
         if not self.puuid:
             for participant in match.info.participants:
-                if participant.summonerName == "aphae":
-                    self.puuid = participant.puuid
+                if participant.puuid == self.puuid:  # Use the already set PUUID
                     break
 
     def get_player_stats(self) -> Dict:
@@ -299,6 +298,77 @@ class StatsAnalyzer:
             "champions_played": champions_played,
             "positions_played": positions_played
         }
+
+    def get_champion_stats(self) -> Dict:
+        """Get aggregated statistics for each champion played."""
+        if not self.puuid:
+            return {}
+
+        champion_stats = {}
+        
+        for match in self.matches:
+            for participant in match.info.participants:
+                if participant.puuid == self.puuid:
+                    champion = participant.championName
+                    if champion not in champion_stats:
+                        champion_stats[champion] = {
+                            "games_played": 0,
+                            "wins": 0,
+                            "losses": 0,
+                            "kills": 0,
+                            "deaths": 0,
+                            "assists": 0,
+                            "total_damage_dealt": 0,
+                            "total_damage_taken": 0,
+                            "total_gold_earned": 0,
+                            "vision_score": 0,
+                            "positions": {}
+                        }
+                    
+                    stats = champion_stats[champion]
+                    stats["games_played"] += 1
+                    stats["wins"] += 1 if participant.win else 0
+                    stats["losses"] += 0 if participant.win else 1
+                    stats["kills"] += participant.kills
+                    stats["deaths"] += participant.deaths
+                    stats["assists"] += participant.assists
+                    stats["total_damage_dealt"] += participant.totalDamageDealtToChampions
+                    stats["total_damage_taken"] += participant.totalDamageTaken
+                    stats["total_gold_earned"] += participant.goldEarned
+                    stats["vision_score"] += participant.visionScore
+                    
+                    # Track positions played
+                    position = participant.individualPosition
+                    if position not in stats["positions"]:
+                        stats["positions"][position] = 0
+                    stats["positions"][position] += 1
+                    
+                    break
+
+        # Calculate averages and rates
+        for champion in champion_stats:
+            stats = champion_stats[champion]
+            games = stats["games_played"]
+            
+            # Calculate win rate
+            stats["win_rate"] = (stats["wins"] / games * 100) if games > 0 else 0
+            
+            # Calculate KDA
+            deaths = stats["deaths"]
+            if deaths > 0:
+                stats["kda"] = (stats["kills"] + stats["assists"]) / deaths
+            else:
+                stats["kda"] = stats["kills"] + stats["assists"]
+            
+            # Calculate averages
+            stats["avg_kills"] = stats["kills"] / games if games > 0 else 0
+            stats["avg_deaths"] = stats["deaths"] / games if games > 0 else 0
+            stats["avg_assists"] = stats["assists"] / games if games > 0 else 0
+            stats["avg_damage"] = stats["total_damage_dealt"] / games if games > 0 else 0
+            stats["avg_gold"] = stats["total_gold_earned"] / games if games > 0 else 0
+            stats["avg_vision"] = stats["vision_score"] / games if games > 0 else 0
+
+        return champion_stats
 
     def get_match_details(self, match_id: str) -> Optional[Dict]:
         """Get detailed stats for a specific match."""
