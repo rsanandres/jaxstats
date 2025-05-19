@@ -1,7 +1,26 @@
 document.addEventListener('DOMContentLoaded', () => {
+    const tabStats = document.getElementById('tabStats');
+    const tabCompare = document.getElementById('tabCompare');
+    const results = document.getElementById('results');
+    const compareTab = document.getElementById('compareTab');
+
+    tabStats.addEventListener('click', () => {
+        tabStats.classList.add('active');
+        tabCompare.classList.remove('active');
+        results.classList.remove('hidden');
+        compareTab.classList.add('hidden');
+    });
+
+    tabCompare.addEventListener('click', () => {
+        tabCompare.classList.add('active');
+        tabStats.classList.remove('active');
+        compareTab.classList.remove('hidden');
+        results.classList.add('hidden');
+    });
+
+    // Existing form and fetch logic for single user stats
     const form = document.getElementById('summonerForm');
     const loading = document.getElementById('loading');
-    const results = document.getElementById('results');
     const error = document.getElementById('error');
     const overallStats = document.getElementById('overallStats');
     const matchList = document.getElementById('matchList');
@@ -127,6 +146,103 @@ document.addEventListener('DOMContentLoaded', () => {
     refreshButton.addEventListener('click', async () => {
         await fetchData(false);
     });
+
+    // New form and fetch logic for comparing two users
+    const compareForm = document.createElement('form');
+    compareForm.id = 'compareForm';
+    compareForm.className = 'search-form';
+    compareForm.innerHTML = `
+        <div class="form-group">
+            <label for="summoner1Name">Summoner 1 Name</label>
+            <input type="text" id="summoner1Name" name="summoner1Name" required>
+        </div>
+        <div class="form-group">
+            <label for="summoner1Region">Summoner 1 Region</label>
+            <select id="summoner1Region" name="summoner1Region" required>
+                <option value="na1">North America</option>
+                <option value="euw1">Europe West</option>
+                <option value="eun1">Europe Nordic</option>
+                <option value="kr">Korea</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label for="summoner2Name">Summoner 2 Name</label>
+            <input type="text" id="summoner2Name" name="summoner2Name" required>
+        </div>
+        <div class="form-group">
+            <label for="summoner2Region">Summoner 2 Region</label>
+            <select id="summoner2Region" name="summoner2Region" required>
+                <option value="na1">North America</option>
+                <option value="euw1">Europe West</option>
+                <option value="eun1">Europe Nordic</option>
+                <option value="kr">Korea</option>
+            </select>
+        </div>
+        <button type="submit" class="btn w-full">Compare</button>
+    `;
+    compareTab.insertBefore(compareForm, compareTab.firstChild);
+
+    compareForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const summoner1Name = document.getElementById('summoner1Name').value;
+        const summoner1Region = document.getElementById('summoner1Region').value;
+        const summoner2Name = document.getElementById('summoner2Name').value;
+        const summoner2Region = document.getElementById('summoner2Region').value;
+
+        try {
+            loading.classList.remove('hidden');
+            error.classList.add('hidden');
+
+            const response = await fetch('/api/compare', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    summoner1_name: summoner1Name,
+                    summoner1_region: summoner1Region,
+                    summoner2_name: summoner2Name,
+                    summoner2_region: summoner2Region,
+                    match_count: 20
+                }),
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to fetch comparison');
+            }
+
+            const data = await response.json();
+            displayComparison(data.user1, data.user2);
+        } catch (err) {
+            error.textContent = err.message;
+            error.classList.remove('hidden');
+        } finally {
+            loading.classList.add('hidden');
+        }
+    });
+
+    function displayComparison(user1, user2) {
+        const user1Stats = document.getElementById('user1Stats');
+        const user2Stats = document.getElementById('user2Stats');
+
+        user1Stats.innerHTML = `
+            <h3>${user1.summoner_name}</h3>
+            <p>Level: ${user1.summoner_level}</p>
+            <p>Win Rate: ${user1.overall_stats.win_rate.toFixed(1)}%</p>
+            <p>KDA: ${user1.overall_stats.kda.toFixed(2)}</p>
+            <p>Matches: ${user1.overall_stats.total_matches}</p>
+            <p>Vision: ${user1.overall_stats.vision_score}</p>
+        `;
+
+        user2Stats.innerHTML = `
+            <h3>${user2.summoner_name}</h3>
+            <p>Level: ${user2.summoner_level}</p>
+            <p>Win Rate: ${user2.overall_stats.win_rate.toFixed(1)}%</p>
+            <p>KDA: ${user2.overall_stats.kda.toFixed(2)}</p>
+            <p>Matches: ${user2.overall_stats.total_matches}</p>
+            <p>Vision: ${user2.overall_stats.vision_score}</p>
+        `;
+    }
 
     function displayOverallStats(stats) {
         if (!stats) return;
