@@ -58,6 +58,13 @@ class DebugLog(BaseModel):
     traceback: Optional[str] = None
     code_context: Optional[Dict] = None
 
+class CompareRequest(BaseModel):
+    summoner1_name: str
+    summoner1_region: str
+    summoner2_name: str
+    summoner2_region: str
+    match_count: int = 5
+
 def log_debug(level: str, message: str, exc_info=None):
     """Log debug information with timestamp and stack trace."""
     timestamp = datetime.now().isoformat()
@@ -184,6 +191,21 @@ async def analyze_summoner(summoner_name: str, region: str = "na1", match_count:
         }
     except Exception as e:
         error_msg = f"Error analyzing summoner: {str(e)}"
+        log_debug("ERROR", error_msg, sys.exc_info())
+        raise HTTPException(status_code=500, detail=error_msg)
+
+@app.post("/api/compare")
+async def compare_summoners(request: CompareRequest):
+    """Compare two summoners' stats side by side."""
+    try:
+        user1_stats = await analyze_summoner(request.summoner1_name, request.summoner1_region, request.match_count)
+        user2_stats = await analyze_summoner(request.summoner2_name, request.summoner2_region, request.match_count)
+        return {
+            "user1": user1_stats,
+            "user2": user2_stats
+        }
+    except Exception as e:
+        error_msg = f"Error comparing summoners: {str(e)}"
         log_debug("ERROR", error_msg, sys.exc_info())
         raise HTTPException(status_code=500, detail=error_msg)
 
