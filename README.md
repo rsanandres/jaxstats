@@ -62,4 +62,8 @@ A Python-based League of Legends stats analysis tool that uses Jax for machine l
 
 ## Note
 
-This application requires a valid Riot Games API key. You can obtain one from the [Riot Games Developer Portal](https://developer.riotgames.com/). 
+This application requires a valid Riot Games API key. You can obtain one from the [Riot Games Developer Portal](https://developer.riotgames.com/).
+
+## Local Kubernetes Deployment
+
+For step-by-step instructions on running JaxStats locally with Kubernetes and KinD, see [DEPLOYMENT.md](./DEPLOYMENT.md). 

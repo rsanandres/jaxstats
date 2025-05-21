@@ -1,0 +1,38 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: jaxstats
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: jaxstats
+  template:
+    metadata:
+      labels:
+        app: jaxstats
+    spec:
+      containers:
+      - name: jaxstats
+        image: jaxstats:local
+        ports:
+        - containerPort: 8000
+        env:
+        - name: RIOT_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: riot-api-key
+              key: RIOT_API_KEY
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: jaxstats
+spec:
+  type: NodePort
+  ports:
+    - port: 8000
+      targetPort: 8000
+      nodePort: 30080
+  selector:
+    app: jaxstats 
