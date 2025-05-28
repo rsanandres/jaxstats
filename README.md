@@ -1,69 +1,97 @@
-# JaxStats - League of Legends Stats Analysis Tool
+# JaxStats
 
-A Python-based League of Legends stats analysis tool that uses Jax for machine learning-powered performance analysis.
+JaxStats is a League of Legends replay analysis tool that allows users to upload and analyze their game replays.
 
 ## Features
 
-- Riot Games API integration for fetching match data
-- Detailed player statistics analysis
-- Machine learning-powered performance rating using Jax
-- Interactive web interface
-- Match history analysis with highlights and lowlights
+- Upload and manage League of Legends replay files (.rofl)
+- View replay data in an interactive visualization
+- Track champion positions and game events
+- Analyze player performance and game statistics
 
-## Setup
+## Prerequisites
 
-1. Clone this repository
-2. Create a virtual environment:
-   ```bash
-   python -m venv venv
-   source venv/bin/activate  # On Windows: venv\Scripts\activate
-   ```
-3. Install dependencies:
-   ```bash
-   pip install -r requirements.txt
-   ```
-4. Set up your Riot Games API key using one of these methods:
+- Docker and Docker Compose
+- Node.js 16+ (for local frontend development)
+- Python 3.9+ (for local backend development)
 
-   **Option 1 - Using .env file:**
-   Create a `.env` file in the root directory and add your Riot Games API key:
-   ```
-   RIOT_API_KEY=your_api_key_here
-   ```
+## Installation
 
-   **Option 2 - Using export command:**
-   Set the environment variable in your terminal:
-   ```bash
-   export RIOT_API_KEY=your_api_key_here
-   ```
-   Note: This method only persists for your current terminal session.
+1. Clone the repository:
+```bash
+git clone https://github.com/yourusername/jaxstats.git
+cd jaxstats
+```
 
-5. Run the application:
-   ```bash
-   uvicorn app.main:app --reload
-   ```
-6. Open your browser and navigate to `http://localhost:8000`
+2. Build and start the services using Docker Compose:
+```bash
+docker-compose up --build
+```
 
-## Usage
+The application will be available at:
+- Frontend: http://localhost
+- Backend API: http://localhost:8000
 
-1. Enter a summoner name and select your region
-2. View overall statistics and recent matches
-3. Click on individual matches to see detailed analysis
-4. Review the ML-powered performance rating and analysis
+## Development
+
+### Backend
+
+The backend is built with FastAPI and provides the following API endpoints:
+
+- `GET /api/replays` - List all available replays
+- `GET /api/replays/{match_id}` - Get replay data for a specific match
+- `POST /api/replays/upload` - Upload a new replay file
+
+To run the backend locally:
+
+```bash
+cd jaxstats
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+pip install -r requirements.txt
+uvicorn app.main:app --reload
+```
+
+### Frontend
+
+The frontend is built with React and Material-UI. To run it locally:
+
+```bash
+cd jaxstats/frontend
+npm install
+npm start
+```
 
 ## Project Structure
 
-- `app/` - Main application directory
-  - `api/` - Riot Games API client
-  - `analysis/` - Data processing and analysis
-  - `ml/` - Jax-based machine learning models
-  - `static/` - Frontend assets
-  - `templates/` - HTML templates
-  - `main.py` - FastAPI application entry point
+```
+jaxstats/
+├── app/                    # Backend application
+│   ├── api/               # API routes and clients
+│   ├── models/            # Data models
+│   ├── services/          # Business logic
+│   └── main.py           # FastAPI application
+├── frontend/              # Frontend application
+│   ├── src/
+│   │   ├── components/   # React components
+│   │   ├── types/        # TypeScript types
+│   │   └── App.tsx       # Main application
+│   └── package.json
+├── data/                  # Data storage
+│   └── replays/          # Replay files
+├── Dockerfile            # Backend Dockerfile
+├── docker-compose.yml    # Docker Compose configuration
+└── requirements.txt      # Python dependencies
+```
 
-## Note
+## Contributing
 
-This application requires a valid Riot Games API key. You can obtain one from the [Riot Games Developer Portal](https://developer.riotgames.com/).
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add some amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
 
-## Local Kubernetes Deployment
+## License
 
-For step-by-step instructions on running JaxStats locally with Kubernetes and KinD, see [DEPLOYMENT.md](./DEPLOYMENT.md). 
+This project is licensed under the MIT License - see the LICENSE file for details. 

@@ -63,28 +63,20 @@ async def get_game_state(replay_id: str, timestamp: int):
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/process")
-async def process_replay(file: UploadFile = File(...)):
+async def process_replay(match_id: str, region: str = "na1"):
     """
-    Process a .rofl file and store the extracted data.
+    Process a match timeline from the Riot API and store the extracted data.
     """
     try:
-        # Create temporary directory for the uploaded file
-        with tempfile.TemporaryDirectory() as temp_dir:
-            # Save the uploaded file
-            file_path = os.path.join(temp_dir, file.filename)
-            with open(file_path, "wb") as buffer:
-                shutil.copyfileobj(file.file, buffer)
-            
-            # Parse the .rofl file
-            replay = await replay_parser.parse_rofl_file(file_path)
-            
-            # Save the processed replay
-            replay_id = replay_service.save_replay(replay)
-            
-            return {
-                "replay_id": replay_id,
-                "status": "success"
-            }
-            
+        # Parse the match timeline
+        replay = await replay_parser.parse_match_timeline(match_id, region)
+        
+        # Save the processed replay
+        replay_id = replay_service.save_replay(replay)
+        
+        return {
+            "replay_id": replay_id,
+            "status": "success"
+        }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) 

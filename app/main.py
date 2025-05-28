@@ -10,17 +10,26 @@ import traceback
 import sys
 import logging
 from datetime import datetime
+from fastapi.middleware.cors import CORSMiddleware
+from .api.routes import replay_routes
 
 from .api.riot_client import RiotAPIClient
 from .analysis.stats_analyzer import StatsAnalyzer
-from .replay.api.routes import router as replay_api_router
-from .replay.api.views import router as replay_view_router
 
 # Configure logging
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="JaxStats - League of Legends Stats Analysis")
+app = FastAPI(title="JaxStats API")
+
+# Configure CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # In production, replace with specific origins
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # Mount static files
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
@@ -36,8 +45,7 @@ stats_analyzer = StatsAnalyzer()
 debug_logs = []
 
 # Include replay system routers
-app.include_router(replay_api_router)
-app.include_router(replay_view_router)
+app.include_router(replay_routes.router, prefix="/api", tags=["replays"])
 
 class SummonerRequest(BaseModel):
     summoner_name: str
@@ -103,6 +111,14 @@ log_debug("INFO", "Application started")
 log_debug("WARNING", "This is a test warning message")
 log_debug("ERROR", "This is a test error message", sys.exc_info())
 
+@app.get("/")
+async def root():
+    return {"message": "Welcome to JaxStats API"}
+
+@app.get("/health")
+async def health_check():
+    return {"status": "healthy"}
+
 @app.get("/", response_class=HTMLResponse)
 async def home(request: Request):
     """Render the home page."""
@@ -126,6 +142,7 @@ async def analyze_summoner_post(request: SummonerRequest):
     except Exception as e:
         error_msg = f"Error analyzing summoner: {str(e)}"
         log_debug("ERROR", error_msg, sys.exc_info())
+        logger.error(f"Unhandled exception: {error_msg}", exc_info=True)
         raise HTTPException(status_code=500, detail=error_msg)
 
 @app.get("/api/analyze/{summoner_name}")

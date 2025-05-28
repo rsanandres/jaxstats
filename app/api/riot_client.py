@@ -75,22 +75,23 @@ class RiotAPIClient:
                     elif response.status == 404:
                         error_text = await response.text()
                         print(f"Resource not found. Failed URL: {url}. Response: {error_text}")
-                        return None
+                        raise HTTPException(status_code=404, detail=f"Resource not found: {error_text}")
                     elif response.status == 429:  # Rate limit exceeded
                         error_text = await response.text()
                         print(f"Rate limit exceeded. Waiting 120 seconds before retrying. Failed URL: {url}")
                         await asyncio.sleep(120)  # Wait for 2 minutes
                         return await self._make_request(url, headers)  # Retry the request
                     elif response.status == 403:
-                        print(f"Skipping forbidden request: {url}")
-                        return None
+                        error_text = await response.text()
+                        print(f"API key invalid or expired. Failed URL: {url}. Response: {error_text}")
+                        raise HTTPException(status_code=403, detail="API key invalid or expired")
                     else:
                         error_text = await response.text()
                         print(f"API request failed with status {response.status}. Failed URL: {url}. Response: {error_text}")
-                        return None
+                        raise HTTPException(status_code=response.status, detail=f"API request failed: {error_text}")
             except aiohttp.ClientError as e:
                 print(f"Request failed: {str(e)}")
-                return None
+                raise HTTPException(status_code=500, detail=f"Request failed: {str(e)}")
 
     def _save_match_data(self, match_id: str, data: Dict):
         """Save match data to a JSON file."""

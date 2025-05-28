@@ -185,7 +185,8 @@ class StatsAnalyzer:
         # Set PUUID if not set and we find it in the participants
         if not self.puuid:
             for participant in match.info.participants:
-                if participant.puuid == self.puuid:  # Use the already set PUUID
+                if participant.puuid == match_data.get('info', {}).get('participants', [{}])[0].get('puuid'):
+                    self.puuid = participant.puuid
                     break
 
     def get_player_stats(self) -> Dict:

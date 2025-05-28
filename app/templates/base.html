@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}JaxStats{% endblock %}</title>
+    
+    <!-- Styles -->
+    <link rel="stylesheet" href="/static/css/styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Scripts -->
+    <script src="/static/js/replay.js" defer></script>
+    {% block extra_scripts %}{% endblock %}
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+        <nav class="nav">
+            <a href="/" class="nav-link">Home</a>
+            <a href="/replays" class="nav-link">Replays</a>
+        </nav>
+    </header>
+
+    <!-- Main Content -->
+    <main class="container">
+        {% block content %}{% endblock %}
+    </main>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <p>&copy; 2024 JaxStats. All rights reserved.</p>
+    </footer>
+
+    <!-- Debug Panel -->
+    <div id="debugPanel" class="translate-x-full">
+        <div class="debug-header">
+            <h2>Debug Logs</h2>
+            <button id="clearLogs">Clear</button>
+        </div>
+        <div id="debugLogs"></div>
+    </div>
+    <button id="debugToggle">Debug</button>
+
+    <!-- Debug Panel Script -->
+    <script>
+        document.getElementById('debugToggle').addEventListener('click', () => {
+            document.getElementById('debugPanel').classList.toggle('translate-x-full');
+        });
+
+        document.getElementById('clearLogs').addEventListener('click', () => {
+            document.getElementById('debugLogs').innerHTML = '';
+        });
+
+        // Function to add a log entry
+        function addLogEntry(log) {
+            const logsContainer = document.getElementById('debugLogs');
+            const logEntry = document.createElement('div');
+            logEntry.className = `debug-log-entry ${log.level.toLowerCase()}`;
+            
+            const content = `
+                <div class="log-header">
+                    <span class="log-timestamp">${log.timestamp}</span>
+                    <span class="log-level">${log.level}</span>
+                </div>
+                <div class="log-message">${log.message}</div>
+                ${log.traceback ? `<pre class="log-traceback">${log.traceback}</pre>` : ''}
+                ${log.code_context ? `
+                    <div class="log-context">
+                        <p>File: ${log.code_context.filename}</p>
+                        <p>Line: ${log.code_context.line_number}</p>
+                        <p>Function: ${log.code_context.function}</p>
+                        <pre>${log.code_context.code}</pre>
+                    </div>
+                ` : ''}
+            `;
+            
+            logEntry.innerHTML = content;
+            logsContainer.appendChild(logEntry);
+            logsContainer.scrollTop = logsContainer.scrollHeight;
+        }
+
+        // Poll for new logs
+        async function pollLogs() {
+            try {
+                const response = await fetch('/api/debug-logs');
+                const data = await response.json();
+                data.logs.forEach(log => addLogEntry(log));
+            } catch (error) {
+                console.error('Error polling logs:', error);
+            }
+            setTimeout(pollLogs, 5000);
+        }
+
+        // Start polling
+        pollLogs();
+    </script>
+</body>
+</html> 
