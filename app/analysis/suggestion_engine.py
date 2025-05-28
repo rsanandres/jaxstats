@@ -1,7 +1,11 @@
-from transformers import pipeline
-
-# Use a lightweight, open model and force CPU for compatibility
-llm = pipeline("text2text-generation", model="google/flan-t5-base", device=-1)
+try:
+    from transformers import pipeline
+    ML_AVAILABLE = True
+    # Use a lightweight, open model and force CPU for compatibility
+    llm = pipeline("text2text-generation", model="google/flan-t5-base", device=-1)
+except ImportError:
+    ML_AVAILABLE = False
+    llm = None
 
 def format_stats_natural_language(stats):
     return (
@@ -15,20 +19,51 @@ def format_stats_natural_language(stats):
 
 def generate_suggestion(match_stats: dict, history_stats: list = None) -> str:
     """
-    Generate a suggestion for a match using an LLM.
+    Generate suggestions based on match statistics using rule-based analysis.
     match_stats: dict of stats for the current match
     history_stats: list of dicts for previous matches (optional)
     """
-    prompt = (
-        "You are a League of Legends coach. Analyze the following match stats and give one or two actionable suggestions for improvement.\n"
-        f"Current match stats: {format_stats_natural_language(match_stats)}\n"
-    )
+    suggestions = []
+    
+    # Analyze deaths
+    deaths = match_stats.get('deaths', 0)
+    if deaths > 5:
+        suggestions.append("Focus on reducing deaths by playing more safely and respecting enemy cooldowns.")
+    elif deaths > 3:
+        suggestions.append("Consider your positioning to avoid unnecessary deaths.")
+    
+    # Analyze vision score
+    vision_score = match_stats.get('vision_score', 0)
+    if vision_score < 20:
+        suggestions.append("Improve vision control by placing more wards and clearing enemy vision.")
+    elif vision_score < 30:
+        suggestions.append("Your vision score is decent, but could be improved for better map control.")
+    
+    # Analyze KDA
+    kda = match_stats.get('kda', 0)
+    if kda < 2:
+        suggestions.append("Work on improving your KDA by focusing on positioning and teamfight participation.")
+    elif kda < 3:
+        suggestions.append("Your KDA is improving, but there's still room for better performance.")
+    
+    # Analyze damage dealt
+    damage_dealt = match_stats.get('damage_dealt', 0)
+    if damage_dealt < 15000:
+        suggestions.append("Focus on dealing more damage in teamfights and skirmishes.")
+    
+    # Analyze gold earned
+    gold_earned = match_stats.get('gold_earned', 0)
+    if gold_earned < 10000:
+        suggestions.append("Work on improving your farming and objective control for better gold income.")
+    
+    # If we have history stats, look for trends
     if history_stats:
-        prompt += "Recent matches:\n"
-        for h in history_stats:
-            prompt += f"- {format_stats_natural_language(h)}\n"
-    prompt += "Suggestions:"
-
-    result = llm(prompt, max_new_tokens=128, do_sample=True, temperature=0.7)
-    suggestion = result[0]['generated_text'].strip()
-    return suggestion 
+        recent_deaths = [h.get('deaths', 0) for h in history_stats[-3:]]
+        if all(d > 5 for d in recent_deaths):
+            suggestions.append("You've been dying too much in recent games. Focus on survival and positioning.")
+        
+        recent_vision = [h.get('vision_score', 0) for h in history_stats[-3:]]
+        if all(v < 20 for v in recent_vision):
+            suggestions.append("Vision control has been consistently low. Make warding a priority.")
+    
+    return " ".join(suggestions) if suggestions else "Keep practicing and focus on improving your gameplay." 

@@ -13,7 +13,6 @@ from datetime import datetime
 
 from .api.riot_client import RiotAPIClient
 from .analysis.stats_analyzer import StatsAnalyzer
-from .ml.performance_model import PerformanceModel
 from .replay.api.routes import router as replay_api_router
 from .replay.api.views import router as replay_view_router
 
@@ -32,7 +31,6 @@ templates = Jinja2Templates(directory="app/templates")
 # Initialize components
 riot_client = RiotAPIClient()
 stats_analyzer = StatsAnalyzer()
-performance_model = PerformanceModel()
 
 # Store debug logs
 debug_logs = []
@@ -198,15 +196,34 @@ async def analyze_summoner(summoner_name: str, region: str = "na1", match_count:
                 }
             }
         
-        # Analyze matches
-        stats_analyzer = StatsAnalyzer()
-        stats_analyzer.puuid = puuid
-        for match in matches_data:
-            stats_analyzer.add_match(match)
+        # Process matches
+        match_analyses = []
+        for match_data in matches_data:
+            # Get basic stats
+            basic_stats = stats_analyzer.get_basic_stats(match_data)
+            vision_stats = stats_analyzer.get_vision_stats(match_data)
+            objective_stats = stats_analyzer.get_objective_stats(match_data)
+            damage_stats = stats_analyzer.get_damage_stats(match_data)
+            timeline = stats_analyzer.get_timeline(match_data)
+            
+            # Create match analysis
+            match_analysis = MatchAnalysis(
+                match_id=match_data["metadata"]["matchId"],
+                performance_score=stats_analyzer.calculate_performance_score(match_data),
+                analysis=stats_analyzer.generate_analysis(match_data),
+                basic_stats=basic_stats,
+                vision_stats=vision_stats,
+                objective_stats=objective_stats,
+                damage_stats=damage_stats,
+                timeline=timeline,
+                improvement_suggestions=stats_analyzer.get_improvement_suggestions(match_data)
+            )
+            match_analyses.append(match_analysis)
         
+        # Get overall stats
         overall_stats = stats_analyzer.get_player_stats()
-        match_analyses = [stats_analyzer.get_match_details(m.get('metadata', {}).get('matchId', '')) for m in matches_data]
-        match_analyses = [m for m in match_analyses if m]
+        
+        # Get champion stats
         champion_stats = stats_analyzer.get_champion_stats()
         
         return {
@@ -214,16 +231,17 @@ async def analyze_summoner(summoner_name: str, region: str = "na1", match_count:
             "summoner_level": summoner.get("summonerLevel", 0),
             "profile_icon_id": summoner.get("profileIconId", 0),
             "overall_stats": overall_stats,
-            "match_analyses": match_analyses,
+            "match_analyses": [analysis.dict() for analysis in match_analyses],
             "champion_stats": champion_stats,
             "match_count": {
                 "requested": match_count,
                 "retrieved": len(match_ids),
-                "analyzed": len(match_analyses),
+                "analyzed": len(matches_data),
                 "cached": len(cached_matches),
                 "new": len(new_matches)
             }
         }
+        
     except Exception as e:
         error_msg = f"Error analyzing summoner: {str(e)}"
         log_debug("ERROR", error_msg, sys.exc_info())

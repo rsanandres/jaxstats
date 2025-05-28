@@ -14,7 +14,8 @@ spec:
     spec:
       containers:
       - name: jaxstats
-        image: jaxstats:local
+        image: jaxstats:latest
+        imagePullPolicy: Never
         ports:
         - containerPort: 8000
         env:
