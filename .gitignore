@@ -1,19 +1,41 @@
-# Python virtual environments
-venv/
-.env/
-.venv/
-
-# Python cache
+# Python
 __pycache__/
-*.pyc
+*.py[cod]
 *.pyo
 *.pyd
+*.so
+
+# Virtual environments
+venv/
+.env
 
 # Jupyter Notebook checkpoints
-.ipynb_checkpoints/
+.ipynb_checkpoints
 
-# VSCode settings
+# VSCode
 .vscode/
+
+# MacOS
+.DS_Store
+
+# Static assets (generated or downloaded)
+app/static/replay/maps/
+app/static/replay/champions/
+app/static/replay/icons/
+
+# Logs
+*.log
+
+# Test output
+htmlcov/
+.coverage
+
+# Docker
+*.pid
+
+# Misc
+*.swp
+*.swo
 
 # Model files and HuggingFace cache
 *.bin
@@ -34,14 +56,9 @@ cache/
 ~/.cache/torch/
 
 # System files
-.DS_Store
 Thumbs.db
 
-# Logs
-*.log
-
 # Environment variables
-.env
 .env.*
 
 # Ignore data and output folders (if you want)

@@ -14,6 +14,8 @@ from datetime import datetime
 from .api.riot_client import RiotAPIClient
 from .analysis.stats_analyzer import StatsAnalyzer
 from .ml.performance_model import PerformanceModel
+from .replay.api.routes import router as replay_api_router
+from .replay.api.views import router as replay_view_router
 
 # Configure logging
 logging.basicConfig(level=logging.DEBUG)
@@ -34,6 +36,10 @@ performance_model = PerformanceModel()
 
 # Store debug logs
 debug_logs = []
+
+# Include replay system routers
+app.include_router(replay_api_router)
+app.include_router(replay_view_router)
 
 class SummonerRequest(BaseModel):
     summoner_name: str
