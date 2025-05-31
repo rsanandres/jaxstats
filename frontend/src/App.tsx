@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Tabs, Tab, Box, Typography } from '@mui/material';
+import { Tabs, Tab, Box } from '@mui/material';
 import StatsTab from './components/StatsTab';
 import ReplayTab from './components/ReplayTab';
 import TerminalTab from './components/TerminalTab';
