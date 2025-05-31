@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { Box, Slider, Typography, Paper } from '@mui/material';
 import { ProcessedReplay, GameState } from '../types/replay';
 
@@ -21,12 +21,7 @@ const ReplayVisualizer: React.FC<ReplayVisualizerProps> = ({ replay }) => {
         setCurrentState(replay.game_states[0]);
     }, [replay]);
 
-    useEffect(() => {
-        if (!currentState) return;
-        drawGameState();
-    }, [currentState]);
-
-    const drawGameState = () => {
+    const drawGameState = useCallback(() => {
         const canvas = canvasRef.current;
         if (!canvas || !currentState) return;
 
@@ -64,7 +59,12 @@ const ReplayVisualizer: React.FC<ReplayVisualizerProps> = ({ replay }) => {
             const y = (state.position.y / MAP_HEIGHT) * CANVAS_HEIGHT;
             drawChampion(x, y, 'red');
         });
-    };
+    }, [currentState]);
+
+    useEffect(() => {
+        if (!currentState) return;
+        drawGameState();
+    }, [currentState, drawGameState]);
 
     const handleTimeChange = (_: Event, newValue: number | number[]) => {
         const time = newValue as number;
