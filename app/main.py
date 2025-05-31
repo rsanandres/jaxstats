@@ -12,6 +12,7 @@ import logging
 from datetime import datetime
 from fastapi.middleware.cors import CORSMiddleware
 from .api.routes import replay_routes
+from .api.routes import command_log
 
 from .api.riot_client import RiotAPIClient
 from .analysis.stats_analyzer import StatsAnalyzer
@@ -46,6 +47,7 @@ debug_logs = []
 
 # Include replay system routers
 app.include_router(replay_routes.router, prefix="/api", tags=["replays"])
+app.include_router(command_log.router, prefix="/api", tags=["command-log"])
 
 class SummonerRequest(BaseModel):
     summoner_name: str

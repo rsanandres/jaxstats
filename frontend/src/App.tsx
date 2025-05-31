@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Tabs, Tab, Box, Typography } from '@mui/material';
 import StatsTab from './components/StatsTab';
 import ReplayTab from './components/ReplayTab';
+import TerminalTab from './components/TerminalTab';
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -42,6 +43,7 @@ function App() {
         <Tabs value={tabValue} onChange={handleTabChange} aria-label="main tabs">
           <Tab label="Stats" />
           <Tab label="Replays" />
+          <Tab label="Terminal" />
         </Tabs>
       </Box>
       <TabPanel value={tabValue} index={0}>
@@ -49,6 +51,9 @@ function App() {
       </TabPanel>
       <TabPanel value={tabValue} index={1}>
         <ReplayTab />
+      </TabPanel>
+      <TabPanel value={tabValue} index={2}>
+        <TerminalTab />
       </TabPanel>
     </Box>
   );

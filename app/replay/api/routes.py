@@ -74,9 +74,18 @@ async def process_replay(match_id: str, region: str = "na1"):
         # Save the processed replay
         replay_id = replay_service.save_replay(replay)
         
+        # Log the command
+        with open("/tmp/command_log.txt", "a") as f:
+            f.write(f"$ process_replay(match_id={match_id}, region={region})\n")
+            f.write(f"Replay ID: {replay_id}\n\n")
+        
         return {
             "replay_id": replay_id,
             "status": "success"
         }
     except Exception as e:
+        # Log the error
+        with open("/tmp/command_log.txt", "a") as f:
+            f.write(f"$ process_replay(match_id={match_id}, region={region})\n")
+            f.write(f"Error: {str(e)}\n\n")
         raise HTTPException(status_code=500, detail=str(e)) 
