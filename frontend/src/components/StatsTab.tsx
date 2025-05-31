@@ -70,7 +70,7 @@ const StatsTab: React.FC = () => {
         <TextField
           label="Summoner Name"
           value={summonerName}
-          onChange={(e) => setSummonerName(e.target.value)}
+          onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSummonerName(e.target.value)}
           fullWidth
           margin="normal"
         />

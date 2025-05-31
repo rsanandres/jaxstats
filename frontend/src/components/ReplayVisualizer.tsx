@@ -67,7 +67,7 @@ const ReplayVisualizer: React.FC<ReplayVisualizerProps> = ({ replay }) => {
     }, [currentState, drawGameState]);
 
     const handleTimeChange = (_: Event, newValue: number | number[]) => {
-        const time = newValue as number;
+        const time: number = newValue as number;
         setCurrentTime(time);
         
         // Find the closest game state
