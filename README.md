@@ -19,7 +19,7 @@ JaxStats is a League of Legends replay analysis tool that allows users to upload
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/yourusername/jaxstats.git
+git clone https://github.com/rsanandres/jaxstats.git
 cd jaxstats
 ```
 
@@ -94,4 +94,4 @@ jaxstats/
 
 ## License
 
-This project is licensed under the MIT License - see the LICENSE file for details. 
+MIT
