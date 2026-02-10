@@ -6,100 +6,166 @@
     <title>JaxStats - League of Legends Stats</title>
     <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', path='css/style.css') }}">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 </head>
-<body class="bg-black text-white">
-    <div class="container mx-auto px-4 py-8">
-        <header class="text-center mb-12">
-            <h1 class="text-4xl font-bold text-gray-200 mb-2">JaxStats</h1>
-            <p class="text-gray-500">League of Legends Performance</p>
-            <div class="flex justify-center space-x-4 mt-4">
-                <button id="tabStats" class="tab-button active">Stats</button>
-                <button id="tabCompare" class="tab-button">Head to Head</button>
-            </div>
+<body class="bg-gray-950 text-gray-200 min-h-screen">
+    <div class="max-w-6xl mx-auto px-4 py-6">
+        <!-- Header -->
+        <header class="text-center mb-8">
+            <h1 class="text-3xl font-bold tracking-tight">
+                <span class="text-blue-400">Jax</span>Stats
+            </h1>
+            <p class="text-gray-500 text-sm mt-1">League of Legends Performance Dashboard</p>
+            <nav class="flex justify-center gap-1 mt-4">
+                <button id="tabStats" class="tab-btn active" data-tab="statsTab">Stats</button>
+                <button id="tabCompare" class="tab-btn" data-tab="compareTab">Head to Head</button>
+                <button id="tabLive" class="tab-btn" data-tab="liveTab">Live Game</button>
+            </nav>
         </header>
 
         <!-- Search Form -->
         <form id="summonerForm" class="search-form">
-            <div class="form-group">
-                <label for="summonerName">Summoner Name</label>
-                <input type="text" id="summonerName" name="summonerName" required>
-            </div>
-            <div class="form-group">
-                <label for="region">Region</label>
-                <select id="region" name="region" required>
-                    <option value="na1">North America</option>
-                    <option value="euw1">Europe West</option>
-                    <option value="eun1">Europe Nordic</option>
-                    <option value="kr">Korea</option>
+            <div class="flex gap-2">
+                <input type="text" id="summonerName" placeholder="Summoner#TAG" class="flex-1 form-input" required>
+                <select id="region" class="form-select">
+                    <option value="na1">NA</option>
+                    <option value="euw1">EUW</option>
+                    <option value="eun1">EUNE</option>
+                    <option value="kr">KR</option>
                 </select>
+                <button type="submit" class="btn-primary">Search</button>
+                <button type="button" id="refreshBtn" class="btn-secondary" title="Refresh">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                    </svg>
+                </button>
             </div>
-            <button type="submit" class="btn w-full">Search</button>
         </form>
 
-        <div id="loading" class="hidden text-center py-8">
-            <div class="loading-spinner"></div>
+        <div id="loading" class="hidden text-center py-12">
+            <div class="loading-spinner mx-auto"></div>
+            <p class="text-gray-500 mt-3 text-sm">Loading stats...</p>
         </div>
 
-        <div id="results" class="hidden space-y-8">
-            <!-- Overall Stats -->
-            <div class="bg-gray-900/50 rounded-lg p-6">
-                <h2 class="text-xl font-medium text-gray-200 mb-4">Statistics</h2>
-                <div id="overallStats" class="grid grid-cols-2 md:grid-cols-4 gap-4"></div>
+        <!-- ============ STATS TAB ============ -->
+        <div id="statsTab" class="tab-content space-y-6">
+            <!-- GPI Radar + Overall Stats Row -->
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                <!-- GPI Radar Chart -->
+                <div class="panel col-span-1">
+                    <h2 class="panel-title">GPI Score</h2>
+                    <div class="flex items-center justify-center" style="height:220px">
+                        <canvas id="gpiRadar"></canvas>
+                    </div>
+                    <p id="gpiOverall" class="text-center text-2xl font-bold text-blue-400 mt-2">--</p>
+                    <p id="gpiTier" class="text-center text-xs text-gray-500 mt-1"></p>
+                </div>
+                <!-- Stat Cards -->
+                <div class="panel col-span-2">
+                    <h2 class="panel-title">Overview</h2>
+                    <div id="overallStats" class="grid grid-cols-2 md:grid-cols-4 gap-3"></div>
+                    <!-- Trend indicators -->
+                    <div id="trendIndicators" class="flex flex-wrap gap-2 mt-4"></div>
+                </div>
             </div>
 
-            <!-- Champion Stats -->
-            <div class="bg-gray-900/50 rounded-lg p-6">
-                <h2 class="text-xl font-medium text-gray-200 mb-4">Champion Statistics</h2>
-                <div id="championStats" class="space-y-4">
-                    <div class="overflow-x-auto">
-                        <table class="min-w-full">
-                            <thead>
-                                <tr class="text-left text-sm text-gray-500">
-                                    <th class="p-2">Champion</th>
-                                    <th class="p-2">Games</th>
-                                    <th class="p-2">Win Rate</th>
-                                    <th class="p-2">KDA</th>
-                                    <th class="p-2">Avg Kills</th>
-                                    <th class="p-2">Avg Deaths</th>
-                                    <th class="p-2">Avg Assists</th>
-                                    <th class="p-2">Avg Damage</th>
-                                    <th class="p-2">Avg Gold</th>
-                                    <th class="p-2">Avg Vision</th>
-                                </tr>
-                            </thead>
-                            <tbody id="championStatsBody">
-                            </tbody>
-                        </table>
+            <!-- Charts Row -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div class="panel">
+                    <h2 class="panel-title">Performance Trend</h2>
+                    <canvas id="perfTrendChart" height="180"></canvas>
+                </div>
+                <div class="panel">
+                    <h2 class="panel-title">KDA Trend</h2>
+                    <canvas id="kdaTrendChart" height="180"></canvas>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div class="panel">
+                    <h2 class="panel-title">Role Distribution</h2>
+                    <div class="flex justify-center" style="height:200px">
+                        <canvas id="roleChart"></canvas>
                     </div>
+                </div>
+                <div class="panel">
+                    <h2 class="panel-title">Damage Breakdown</h2>
+                    <canvas id="dmgChart" height="180"></canvas>
+                </div>
+            </div>
+
+            <!-- Champion Stats Table -->
+            <div class="panel">
+                <h2 class="panel-title">Champion Statistics</h2>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-sm">
+                        <thead>
+                            <tr class="text-left text-xs text-gray-500 uppercase tracking-wider">
+                                <th class="p-2">Champion</th>
+                                <th class="p-2">Games</th>
+                                <th class="p-2">Win%</th>
+                                <th class="p-2">KDA</th>
+                                <th class="p-2">Avg K/D/A</th>
+                                <th class="p-2">Avg Dmg</th>
+                                <th class="p-2">Avg Gold</th>
+                            </tr>
+                        </thead>
+                        <tbody id="championStatsBody"></tbody>
+                    </table>
                 </div>
             </div>
 
             <!-- Match History -->
-            <div class="bg-gray-900/50 rounded-lg p-6">
-                <h2 class="text-xl font-medium text-gray-200 mb-4">Recent Matches</h2>
-                <div id="matchList" class="space-y-4"></div>
+            <div class="panel">
+                <h2 class="panel-title">Recent Matches</h2>
+                <div id="matchList" class="space-y-2"></div>
             </div>
+        </div>
 
-            <!-- Match Details -->
-            <div id="matchDetails" class="bg-gray-900/50 rounded-lg p-6 hidden">
-                <h2 class="text-xl font-medium text-gray-200 mb-4">Match Details</h2>
-                <div class="space-y-6">
-                    <div id="matchStats" class="grid grid-cols-1 md:grid-cols-2 gap-6"></div>
+        <!-- ============ COMPARE TAB ============ -->
+        <div id="compareTab" class="tab-content hidden space-y-6">
+            <form id="compareForm" class="search-form">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <input type="text" id="summoner1Name" placeholder="Summoner 1#TAG" class="form-input w-full" required>
+                        <select id="summoner1Region" class="form-select w-full mt-2">
+                            <option value="na1">NA</option>
+                            <option value="euw1">EUW</option>
+                            <option value="eun1">EUNE</option>
+                            <option value="kr">KR</option>
+                        </select>
+                    </div>
+                    <div>
+                        <input type="text" id="summoner2Name" placeholder="Summoner 2#TAG" class="form-input w-full" required>
+                        <select id="summoner2Region" class="form-select w-full mt-2">
+                            <option value="na1">NA</option>
+                            <option value="euw1">EUW</option>
+                            <option value="eun1">EUNE</option>
+                            <option value="kr">KR</option>
+                        </select>
+                    </div>
                 </div>
+                <button type="submit" class="btn-primary w-full mt-4">Compare</button>
+            </form>
+            <div id="comparisonResults" class="hidden"></div>
+        </div>
+
+        <!-- ============ LIVE GAME TAB ============ -->
+        <div id="liveTab" class="tab-content hidden space-y-6">
+            <div class="panel">
+                <h2 class="panel-title">Live Game</h2>
+                <p class="text-gray-500 text-sm mb-4">Search for a summoner above to check if they're in game</p>
+                <div id="liveGameContent"></div>
             </div>
         </div>
 
-        <div id="compareTab" class="hidden space-y-8">
-            <h2 class="text-xl font-medium text-gray-200 mb-4">Head to Head Comparison</h2>
-            <div id="comparisonResults" class="grid grid-cols-1 md:grid-cols-2 gap-8">
-                <div id="user1Stats" class="bg-gray-900/50 rounded-lg p-6"></div>
-                <div id="user2Stats" class="bg-gray-900/50 rounded-lg p-6"></div>
-            </div>
-        </div>
-
-        <div id="error" class="hidden bg-red-900/30 text-red-200 p-4 rounded-lg mt-4"></div>
+        <!-- Error -->
+        <div id="error" class="hidden bg-red-900/30 border border-red-800 text-red-200 p-4 rounded-lg mt-4"></div>
     </div>
+
+    <!-- Toast container -->
+    <div id="toastContainer" class="fixed bottom-4 right-4 z-50 space-y-2"></div>
 
     <script src="{{ url_for('static', path='js/main.js') }}"></script>
 </body>
-</html> 
+</html>
