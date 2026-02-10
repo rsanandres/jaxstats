@@ -1,6 +1,7 @@
 from typing import Dict, List, Optional
 from dataclasses import dataclass
 from datetime import datetime
+import numpy as np
 from .suggestion_engine import generate_suggestion
 
 @dataclass
@@ -95,6 +96,7 @@ class Match:
 class StatsAnalyzer:
     def __init__(self):
         self.matches: List[Match] = []
+        self.raw_matches: List[Dict] = []  # Keep raw data for ML feature extraction
         self.puuid: Optional[str] = None
 
     def _parse_participant(self, data: Dict) -> Participant:
@@ -181,13 +183,7 @@ class StatsAnalyzer:
         """Add a match to the analyzer."""
         match = self._parse_match(match_data)
         self.matches.append(match)
-        
-        # Set PUUID if not set and we find it in the participants
-        if not self.puuid:
-            for participant in match.info.participants:
-                if participant.puuid == match_data.get('info', {}).get('participants', [{}])[0].get('puuid'):
-                    self.puuid = participant.puuid
-                    break
+        self.raw_matches.append(match_data)
 
     def get_player_stats(self) -> Dict:
         """Get aggregated stats for the player."""
@@ -455,4 +451,79 @@ class StatsAnalyzer:
                             "analysis": suggestion,
                             "improvement_suggestions": [suggestion] if suggestion else []
                         }
-        return None 
+        return None
+
+    def get_trend_data(self) -> Dict:
+        """Compute performance trends over recent matches.
+
+        Returns per-match metrics and trend direction/magnitude for key stats.
+        """
+        if not self.puuid:
+            return {"matches": [], "trends": {}}
+
+        per_match = []
+        for match in self.matches:
+            for p in match.info.participants:
+                if p.puuid == self.puuid:
+                    deaths = max(p.deaths, 1)
+                    kda = (p.kills + p.assists) / deaths
+                    mins = max(match.info.gameDuration / 60, 1)
+                    cs = p.totalMinionsKilled + p.neutralMinionsKilled
+                    per_match.append({
+                        "match_id": match.metadata.matchId,
+                        "win": p.win,
+                        "kda": round(kda, 2),
+                        "kills": p.kills,
+                        "deaths": p.deaths,
+                        "assists": p.assists,
+                        "cs_per_min": round(cs / mins, 1),
+                        "damage_dealt": p.totalDamageDealtToChampions,
+                        "gold_earned": p.goldEarned,
+                        "vision_score": p.visionScore,
+                        "champion": p.championName,
+                        "game_duration": match.info.gameDuration,
+                    })
+                    break
+
+        if len(per_match) < 2:
+            return {"matches": per_match, "trends": {}}
+
+        # Compute trends: compare first half vs second half
+        mid = len(per_match) // 2
+        first_half = per_match[:mid]
+        second_half = per_match[mid:]
+
+        def avg(lst, key):
+            vals = [m[key] for m in lst]
+            return np.mean(vals) if vals else 0
+
+        trend_keys = ["kda", "cs_per_min", "damage_dealt", "gold_earned", "vision_score"]
+        trends = {}
+        for key in trend_keys:
+            old = avg(first_half, key)
+            new = avg(second_half, key)
+            if old > 0:
+                change_pct = ((new - old) / old) * 100
+            else:
+                change_pct = 0
+            direction = "improving" if change_pct > 5 else "declining" if change_pct < -5 else "stable"
+            trends[key] = {
+                "direction": direction,
+                "change_pct": round(change_pct, 1),
+            }
+
+        # Win streaks
+        current_streak = 0
+        streak_type = None
+        for m in reversed(per_match):
+            if streak_type is None:
+                streak_type = "win" if m["win"] else "loss"
+                current_streak = 1
+            elif (m["win"] and streak_type == "win") or (not m["win"] and streak_type == "loss"):
+                current_streak += 1
+            else:
+                break
+
+        trends["streak"] = {"type": streak_type or "none", "count": current_streak}
+
+        return {"matches": per_match, "trends": trends}

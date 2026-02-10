@@ -3,86 +3,36 @@ __pycache__/
 *.py[cod]
 *.pyo
 *.pyd
-*.pyc
-*.env
-.env*
-venv/
-build/
-dist/
 *.egg-info/
-.DS_Store
-
-# FastAPI/uvicorn
-*.log
-
-# Docker
-*.db
-*.sqlite3
-docker-compose.override.yml
-
-# Node/React
-node_modules/
 build/
 dist/
-.npm/
-.npmrc
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-coverage/
 
-# OS
-.DS_Store
-Thumbs.db
+# Virtual environments
+venv/
+.venv/
+.env/
 
-# Editor
+# Environment variables
+.env
+.env.*
+
+# IDE
 .vscode/
 .idea/
 *.swp
 *.swo
 
-# Data
-/data/
-!/data/.gitkeep
-
-# Replays
-replays/
-!/replays/.gitkeep
-
-# Misc
-*.bak
-*.tmp
-
-# Virtual environments
-venv/
-.env
-
-# Jupyter Notebook checkpoints
-.ipynb_checkpoints
-
-# VSCode
-.vscode/
-
-# Static assets (generated or downloaded)
-app/static/replay/maps/
-app/static/replay/champions/
-app/static/replay/icons/
+# OS
+.DS_Store
+Thumbs.db
 
 # Logs
 *.log
 
-# Test output
-htmlcov/
-.coverage
+# Data cache (match JSON files)
+data/
 
-# Docker
-*.pid
-
-# Misc
-*.swp
-*.swo
-
-# Model files and HuggingFace cache
+# Large model files (generic)
 *.bin
 *.pt
 *.ckpt
@@ -92,22 +42,19 @@ htmlcov/
 *.pb
 *.safetensors
 
-# HuggingFace transformers cache and models
-datasets/
-models/
-cache/
+# HuggingFace cache
 .huggingface/
-~/.cache/huggingface/
-~/.cache/torch/
+datasets/
+cache/
 
-# System files
-Thumbs.db
+# Docker
+*.db
+*.sqlite3
 
-# Environment variables
-.env.*
+# Jupyter
+.ipynb_checkpoints/
 
-# Ignore data and output folders (if you want)
-data/
+# Output
 output/
 
 # Claude Code

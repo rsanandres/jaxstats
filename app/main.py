@@ -14,6 +14,9 @@ from datetime import datetime
 
 from .api.riot_client import RiotAPIClient
 from .analysis.stats_analyzer import StatsAnalyzer
+from .ml.xgb_model import JaxStatsModels
+from .ml.features import extract_participant_features, extract_all_participants
+from .ml.gpi import compute_full_gpi
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -38,6 +41,7 @@ templates = Jinja2Templates(directory="app/templates")
 
 # Initialize components
 riot_client = RiotAPIClient()
+ml_models = JaxStatsModels()
 
 # Store debug logs
 debug_logs = []
@@ -91,6 +95,25 @@ def log_debug(level: str, message: str, exc_info=None):
 
 log_debug("INFO", "Application started")
 
+
+def _find_player_participant(match_data: dict, puuid: str) -> Optional[dict]:
+    """Find the raw participant dict for the given puuid in a match."""
+    for p in match_data.get("info", {}).get("participants", []):
+        if p.get("puuid") == puuid:
+            return p
+    return None
+
+
+def _score_match_for_player(match_data: dict, puuid: str) -> Optional[Dict]:
+    """Run ML scoring on a player's match performance."""
+    participant = _find_player_participant(match_data, puuid)
+    if not participant:
+        return None
+    duration = match_data.get("info", {}).get("gameDuration", 0)
+    features = extract_participant_features(participant, duration)
+    return ml_models.score_match(features)
+
+
 @app.get("/", response_class=HTMLResponse)
 async def home(request: Request):
     """Render the home page."""
@@ -118,28 +141,20 @@ async def analyze_summoner_post(request: SummonerRequest):
 
 @app.get("/api/analyze/{summoner_name}")
 async def analyze_summoner(summoner_name: str, region: str = "na1", match_count: int = 5, use_cache: bool = True):
-    """Analyze a summoner's match history and provide insights (GET endpoint)."""
+    """Analyze a summoner's match history and provide insights."""
     try:
         if match_count < 1 or match_count > 20:
-            error_msg = "Match count must be between 1 and 20"
-            log_debug("ERROR", error_msg)
-            raise ValueError(error_msg)
+            raise ValueError("Match count must be between 1 and 20")
 
         if '#' not in summoner_name:
-            error_msg = "Summoner name must be in the format 'GameName#TAG'"
-            log_debug("ERROR", error_msg)
-            raise ValueError(error_msg)
+            raise ValueError("Summoner name must be in the format 'GameName#TAG'")
 
         game_name, tag_line = summoner_name.split('#')
 
-        log_debug("INFO", f"Fetching account info for {game_name}#{tag_line} in {region}")
         account = await riot_client.get_account_by_riot_id(game_name, tag_line, region)
         puuid = account['puuid']
-
-        log_debug("INFO", f"Fetching summoner info for PUUID {puuid}")
         summoner = await riot_client.get_summoner_by_puuid(puuid, region)
 
-        log_debug("INFO", f"Fetching {match_count} matches for PUUID {puuid}")
         match_ids = await riot_client.get_match_history(puuid, region, count=match_count)
 
         matches_data = []
@@ -151,7 +166,6 @@ async def analyze_summoner(summoner_name: str, region: str = "na1", match_count:
             if cached_data and use_cache:
                 cached_matches.append(cached_data)
             else:
-                log_debug("INFO", f"Fetching details for match {match_id}")
                 match_data = await riot_client.get_match_details(match_id, region)
                 if match_data:
                     new_matches.append(match_data)
@@ -166,15 +180,16 @@ async def analyze_summoner(summoner_name: str, region: str = "na1", match_count:
                 "overall_stats": {},
                 "match_analyses": [],
                 "champion_stats": {},
+                "gpi": {},
+                "trends": {},
                 "match_count": {
                     "requested": match_count,
                     "retrieved": len(match_ids),
-                    "analyzed": 0,
-                    "cached": 0,
-                    "new": 0
+                    "analyzed": 0, "cached": 0, "new": 0
                 }
             }
 
+        # Stats analysis
         stats_analyzer = StatsAnalyzer()
         stats_analyzer.puuid = puuid
         for match in matches_data:
@@ -184,6 +199,26 @@ async def analyze_summoner(summoner_name: str, region: str = "na1", match_count:
         match_analyses = [stats_analyzer.get_match_details(m.get('metadata', {}).get('matchId', '')) for m in matches_data]
         match_analyses = [m for m in match_analyses if m]
         champion_stats = stats_analyzer.get_champion_stats()
+        trend_data = stats_analyzer.get_trend_data()
+
+        # ML scoring per match
+        player_features_list = []
+        for i, match_data in enumerate(matches_data):
+            ml_result = _score_match_for_player(match_data, puuid)
+            if ml_result and i < len(match_analyses):
+                match_analyses[i]["ml_scores"] = ml_result
+
+            # Collect features for GPI
+            participant = _find_player_participant(match_data, puuid)
+            if participant:
+                duration = match_data.get("info", {}).get("gameDuration", 0)
+                feats = extract_participant_features(participant, duration)
+                feats["champion_name"] = participant.get("championName", "")
+                feats["position"] = participant.get("teamPosition", "")
+                player_features_list.append(feats)
+
+        # Full GPI across all matches
+        gpi = compute_full_gpi(player_features_list)
 
         return {
             "summoner_name": summoner.get("name", "Unknown"),
@@ -192,6 +227,9 @@ async def analyze_summoner(summoner_name: str, region: str = "na1", match_count:
             "overall_stats": overall_stats,
             "match_analyses": match_analyses,
             "champion_stats": champion_stats,
+            "gpi": gpi,
+            "trends": trend_data.get("trends", {}),
+            "trend_matches": trend_data.get("matches", []),
             "match_count": {
                 "requested": match_count,
                 "retrieved": len(match_ids),
@@ -205,37 +243,80 @@ async def analyze_summoner(summoner_name: str, region: str = "na1", match_count:
         log_debug("ERROR", error_msg, sys.exc_info())
         raise HTTPException(status_code=500, detail=error_msg)
 
+@app.get("/api/gpi/{summoner_name}")
+async def get_gpi(summoner_name: str, region: str = "na1", match_count: int = 10):
+    """Get full GPI (Gamer Performance Index) breakdown for a summoner."""
+    try:
+        if '#' not in summoner_name:
+            raise ValueError("Summoner name must be in the format 'GameName#TAG'")
+
+        game_name, tag_line = summoner_name.split('#')
+        account = await riot_client.get_account_by_riot_id(game_name, tag_line, region)
+        puuid = account['puuid']
+
+        match_ids = await riot_client.get_match_history(puuid, region, count=min(match_count, 20))
+
+        player_features_list = []
+        for match_id in match_ids:
+            match_data = await riot_client.get_match_details(match_id, region)
+            if match_data:
+                participant = _find_player_participant(match_data, puuid)
+                if participant:
+                    duration = match_data.get("info", {}).get("gameDuration", 0)
+                    feats = extract_participant_features(participant, duration)
+                    feats["champion_name"] = participant.get("championName", "")
+                    feats["position"] = participant.get("teamPosition", "")
+                    player_features_list.append(feats)
+
+        gpi = compute_full_gpi(player_features_list)
+
+        return {
+            "summoner_name": summoner_name,
+            "match_count": len(player_features_list),
+            "gpi": gpi,
+        }
+    except Exception as e:
+        error_msg = f"Error computing GPI: {str(e)}"
+        log_debug("ERROR", error_msg, sys.exc_info())
+        raise HTTPException(status_code=500, detail=error_msg)
+
+@app.get("/api/match-timeline/{match_id}")
+async def get_match_timeline(match_id: str, region: str = "na1"):
+    """Get timeline events for a specific match."""
+    try:
+        timeline = await riot_client.get_match_timeline(match_id, region)
+        if not timeline:
+            raise HTTPException(status_code=404, detail="Timeline not found")
+        return timeline
+    except HTTPException:
+        raise
+    except Exception as e:
+        error_msg = f"Error fetching timeline: {str(e)}"
+        log_debug("ERROR", error_msg, sys.exc_info())
+        raise HTTPException(status_code=500, detail=error_msg)
+
 @app.get("/api/champion-stats/{summoner_name}")
 async def get_champion_stats(summoner_name: str, region: str = "na1", match_count: int = 20):
     """Get champion statistics for a summoner."""
     try:
         if match_count < 1 or match_count > 20:
-            error_msg = "Match count must be between 1 and 20"
-            log_debug("ERROR", error_msg)
-            raise ValueError(error_msg)
+            raise ValueError("Match count must be between 1 and 20")
 
         if '#' not in summoner_name:
-            error_msg = "Summoner name must be in the format 'GameName#TAG'"
-            log_debug("ERROR", error_msg)
-            raise ValueError(error_msg)
+            raise ValueError("Summoner name must be in the format 'GameName#TAG'")
 
         game_name, tag_line = summoner_name.split('#')
 
-        log_debug("INFO", f"Fetching account info for {game_name}#{tag_line} in {region}")
         account = await riot_client.get_account_by_riot_id(game_name, tag_line, region)
         puuid = account['puuid']
 
-        log_debug("INFO", f"Fetching {match_count} matches for PUUID {puuid}")
         match_ids = await riot_client.get_match_history(puuid, region, count=match_count)
 
         matches_data = []
         for match_id in match_ids:
-            log_debug("INFO", f"Fetching details for match {match_id}")
             match_data = await riot_client.get_match_details(match_id, region)
             if match_data:
                 matches_data.append(match_data)
-            else:
-                log_debug("WARNING", f"No data for match {match_id}")
 
         stats_analyzer = StatsAnalyzer()
         stats_analyzer.puuid = puuid
