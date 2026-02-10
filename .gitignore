@@ -15,6 +15,7 @@ venv/
 # Environment variables
 .env
 .env.*
+!.env.example
 
 # IDE
 .vscode/
@@ -57,5 +58,4 @@ cache/
 # Output
 output/
 
-# Claude Code
-CLAUDE.md
+# Claude Code (keep CLAUDE.md tracked)

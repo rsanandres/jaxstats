@@ -424,5 +424,27 @@ async def compare_summoners(request: CompareRequest):
         log_debug("ERROR", error_msg, sys.exc_info())
         raise HTTPException(status_code=500, detail=error_msg)
 
+@app.get("/health")
+async def health_check():
+    """Service health check."""
+    ollama_ok = await check_ollama_health()
+    return {
+        "status": "ok",
+        "riot_api_key": bool(riot_client.api_key),
+        "ollama": "connected" if ollama_ok else "unavailable",
+        "ml_models": ml_models.status,
+    }
+
+@app.get("/health")
+async def health_check():
+    """Service health check."""
+    ollama_ok = await check_ollama_health()
+    return {
+        "status": "ok",
+        "riot_api_key": bool(riot_client.api_key),
+        "ollama": "connected" if ollama_ok else "unavailable",
+        "ml_models": ml_models.status,
+    }
+
 if __name__ == "__main__":
     uvicorn.run("app.main:app", host="0.0.0.0", port=8000, reload=True)
