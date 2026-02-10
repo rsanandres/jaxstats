@@ -47,3 +47,6 @@ Thumbs.db
 # Ignore data and output folders (if you want)
 data/
 output/
+
+# Claude Code
+CLAUDE.md

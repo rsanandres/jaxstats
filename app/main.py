@@ -13,7 +13,6 @@ from datetime import datetime
 
 from .api.riot_client import RiotAPIClient
 from .analysis.stats_analyzer import StatsAnalyzer
-from .ml.performance_model import PerformanceModel
 
 # Configure logging
 logging.basicConfig(level=logging.DEBUG)
@@ -29,8 +28,6 @@ templates = Jinja2Templates(directory="app/templates")
 
 # Initialize components
 riot_client = RiotAPIClient()
-stats_analyzer = StatsAnalyzer()
-performance_model = PerformanceModel()
 
 # Store debug logs
 debug_logs = []
@@ -94,10 +91,7 @@ def log_debug(level: str, message: str, exc_info=None):
     debug_logs.append(log_entry)
     return log_entry
 
-# Add test debug logs
 log_debug("INFO", "Application started")
-log_debug("WARNING", "This is a test warning message")
-log_debug("ERROR", "This is a test error message", sys.exc_info())
 
 @app.get("/", response_class=HTMLResponse)
 async def home(request: Request):

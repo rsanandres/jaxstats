@@ -1,8 +1,3 @@
-from transformers import pipeline
-
-# Use a lightweight, open model and force CPU for compatibility
-llm = pipeline("text2text-generation", model="google/flan-t5-base", device=-1)
-
 def format_stats_natural_language(stats):
     return (
         f"Champion: {stats.get('champion', 'Unknown')}, Position: {stats.get('position', 'Unknown')}, "
@@ -14,21 +9,5 @@ def format_stats_natural_language(stats):
     )
 
 def generate_suggestion(match_stats: dict, history_stats: list = None) -> str:
-    """
-    Generate a suggestion for a match using an LLM.
-    match_stats: dict of stats for the current match
-    history_stats: list of dicts for previous matches (optional)
-    """
-    prompt = (
-        "You are a League of Legends coach. Analyze the following match stats and give one or two actionable suggestions for improvement.\n"
-        f"Current match stats: {format_stats_natural_language(match_stats)}\n"
-    )
-    if history_stats:
-        prompt += "Recent matches:\n"
-        for h in history_stats:
-            prompt += f"- {format_stats_natural_language(h)}\n"
-    prompt += "Suggestions:"
-
-    result = llm(prompt, max_new_tokens=128, do_sample=True, temperature=0.7)
-    suggestion = result[0]['generated_text'].strip()
-    return suggestion 
+    """Placeholder — will be replaced by Ollama in Phase 3."""
+    return "Analysis will be available once the AI engine is connected."
