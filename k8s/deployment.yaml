@@ -1,0 +1,88 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: jaxstats-backend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: jaxstats-backend
+  template:
+    metadata:
+      labels:
+        app: jaxstats-backend
+    spec:
+      containers:
+      - name: backend
+        image: jaxstats-backend:latest
+        imagePullPolicy: Never
+        ports:
+        - containerPort: 8000
+        volumeMounts:
+        - name: replay-data
+          mountPath: /app/data
+        env:
+        - name: APP_ENV
+          value: "production"
+        - name: DEBUG
+          value: "false"
+      volumes:
+      - name: replay-data
+        persistentVolumeClaim:
+          claimName: jaxstats-data-pvc
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: jaxstats-frontend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: jaxstats-frontend
+  template:
+    metadata:
+      labels:
+        app: jaxstats-frontend
+    spec:
+      containers:
+      - name: frontend
+        image: jaxstats-frontend:latest
+        imagePullPolicy: Never
+        ports:
+        - containerPort: 80
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: jaxstats-backend
+spec:
+  selector:
+    app: jaxstats-backend
+  ports:
+  - port: 8000
+    targetPort: 8000
+  type: ClusterIP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: jaxstats-frontend
+spec:
+  selector:
+    app: jaxstats-frontend
+  ports:
+  - port: 80
+    targetPort: 80
+  type: LoadBalancer
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: jaxstats-data-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi 

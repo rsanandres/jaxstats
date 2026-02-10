@@ -3,6 +3,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.responses import HTMLResponse
 from fastapi.requests import Request
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional, List, Dict
 import uvicorn
@@ -15,10 +16,19 @@ from .api.riot_client import RiotAPIClient
 from .analysis.stats_analyzer import StatsAnalyzer
 
 # Configure logging
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 app = FastAPI(title="JaxStats - League of Legends Stats Analysis")
+
+# Configure CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # Mount static files
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
@@ -36,17 +46,6 @@ class SummonerRequest(BaseModel):
     summoner_name: str
     region: str
     match_count: int = 5
-
-class MatchAnalysis(BaseModel):
-    match_id: str
-    performance_score: float
-    analysis: str
-    basic_stats: dict
-    vision_stats: dict
-    objective_stats: dict
-    damage_stats: dict
-    timeline: dict
-    improvement_suggestions: List[str]
 
 class DebugLog(BaseModel):
     timestamp: str
@@ -70,7 +69,6 @@ def log_debug(level: str, message: str, exc_info=None):
 
     if exc_info:
         traceback_str = ''.join(traceback.format_exception(*exc_info))
-        # Get the last frame from the traceback
         tb = traceback.extract_tb(exc_info[2])
         if tb:
             last_frame = tb[-1]
@@ -122,40 +120,33 @@ async def analyze_summoner_post(request: SummonerRequest):
 async def analyze_summoner(summoner_name: str, region: str = "na1", match_count: int = 5, use_cache: bool = True):
     """Analyze a summoner's match history and provide insights (GET endpoint)."""
     try:
-        # Validate match_count
         if match_count < 1 or match_count > 20:
             error_msg = "Match count must be between 1 and 20"
             log_debug("ERROR", error_msg)
             raise ValueError(error_msg)
-            
-        # Split the summoner name into game name and tag line
+
         if '#' not in summoner_name:
             error_msg = "Summoner name must be in the format 'GameName#TAG'"
             log_debug("ERROR", error_msg)
             raise ValueError(error_msg)
-            
+
         game_name, tag_line = summoner_name.split('#')
-        
-        # Get account info using Riot ID
+
         log_debug("INFO", f"Fetching account info for {game_name}#{tag_line} in {region}")
         account = await riot_client.get_account_by_riot_id(game_name, tag_line, region)
         puuid = account['puuid']
-        
-        # Get summoner info
+
         log_debug("INFO", f"Fetching summoner info for PUUID {puuid}")
         summoner = await riot_client.get_summoner_by_puuid(puuid, region)
-        
-        # Get match history with specified count
+
         log_debug("INFO", f"Fetching {match_count} matches for PUUID {puuid}")
         match_ids = await riot_client.get_match_history(puuid, region, count=match_count)
-        
-        # Get match details for each match
+
         matches_data = []
         cached_matches = []
         new_matches = []
-        
+
         for match_id in match_ids:
-            # Try to get cached match data first
             cached_data = riot_client._load_match_data(match_id)
             if cached_data and use_cache:
                 cached_matches.append(cached_data)
@@ -164,11 +155,9 @@ async def analyze_summoner(summoner_name: str, region: str = "na1", match_count:
                 match_data = await riot_client.get_match_details(match_id, region)
                 if match_data:
                     new_matches.append(match_data)
-        
-        # Combine cached and new matches
+
         matches_data = cached_matches + new_matches
-        
-        # If we have no matches at all, return early
+
         if not matches_data:
             return {
                 "summoner_name": summoner.get("name", "Unknown"),
@@ -185,18 +174,17 @@ async def analyze_summoner(summoner_name: str, region: str = "na1", match_count:
                     "new": 0
                 }
             }
-        
-        # Analyze matches
+
         stats_analyzer = StatsAnalyzer()
         stats_analyzer.puuid = puuid
         for match in matches_data:
             stats_analyzer.add_match(match)
-        
+
         overall_stats = stats_analyzer.get_player_stats()
         match_analyses = [stats_analyzer.get_match_details(m.get('metadata', {}).get('matchId', '')) for m in matches_data]
         match_analyses = [m for m in match_analyses if m]
         champion_stats = stats_analyzer.get_champion_stats()
-        
+
         return {
             "summoner_name": summoner.get("name", "Unknown"),
             "summoner_level": summoner.get("summonerLevel", 0),
@@ -221,30 +209,25 @@ async def analyze_summoner(summoner_name: str, region: str = "na1", match_count:
 async def get_champion_stats(summoner_name: str, region: str = "na1", match_count: int = 20):
     """Get champion statistics for a summoner."""
     try:
-        # Validate match_count
         if match_count < 1 or match_count > 20:
             error_msg = "Match count must be between 1 and 20"
             log_debug("ERROR", error_msg)
             raise ValueError(error_msg)
-            
-        # Split the summoner name into game name and tag line
+
         if '#' not in summoner_name:
             error_msg = "Summoner name must be in the format 'GameName#TAG'"
             log_debug("ERROR", error_msg)
             raise ValueError(error_msg)
-            
+
         game_name, tag_line = summoner_name.split('#')
-        
-        # Get account info using Riot ID
+
         log_debug("INFO", f"Fetching account info for {game_name}#{tag_line} in {region}")
         account = await riot_client.get_account_by_riot_id(game_name, tag_line, region)
         puuid = account['puuid']
-        
-        # Get match history with specified count
+
         log_debug("INFO", f"Fetching {match_count} matches for PUUID {puuid}")
         match_ids = await riot_client.get_match_history(puuid, region, count=match_count)
-        
-        # Get match details for each match
+
         matches_data = []
         for match_id in match_ids:
             log_debug("INFO", f"Fetching details for match {match_id}")
@@ -253,15 +236,14 @@ async def get_champion_stats(summoner_name: str, region: str = "na1", match_coun
                 matches_data.append(match_data)
             else:
                 log_debug("WARNING", f"No data for match {match_id}")
-        
-        # Analyze matches
+
         stats_analyzer = StatsAnalyzer()
         stats_analyzer.puuid = puuid
         for match in matches_data:
             stats_analyzer.add_match(match)
-        
+
         champion_stats = stats_analyzer.get_champion_stats()
-        
+
         return {
             "summoner_name": summoner_name,
             "champion_stats": champion_stats,
@@ -292,4 +274,4 @@ async def compare_summoners(request: CompareRequest):
         raise HTTPException(status_code=500, detail=error_msg)
 
 if __name__ == "__main__":
-    uvicorn.run("app.main:app", host="0.0.0.0", port=8000, reload=True) 
+    uvicorn.run("app.main:app", host="0.0.0.0", port=8000, reload=True)

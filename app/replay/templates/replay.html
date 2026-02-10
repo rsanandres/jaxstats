@@ -1,0 +1,479 @@
+{% extends "base.html" %}
+
+{% block title %}Match Replay - {{ match_id }}{% endblock %}
+
+{% block content %}
+<div class="replay-container">
+    <!-- Main replay view -->
+    <div class="replay-view">
+        <!-- 2D Map Canvas -->
+        <canvas id="replayMap" width="800" height="800"></canvas>
+        
+        <!-- Timeline Control -->
+        <div class="timeline-container">
+            <input type="range" id="timeline" min="0" max="{{ game_duration }}" value="0" step="1000">
+            <div class="timeline-labels">
+                <span id="currentTime">0:00</span>
+                <span id="totalTime">{{ game_duration_formatted }}</span>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Data Tabs -->
+    <div class="data-tabs">
+        <div class="tab-buttons">
+            <button class="tab-button active" data-tab="overall">Overall</button>
+            <button class="tab-button" data-tab="player">Player</button>
+            <button class="tab-button" data-tab="events">Events</button>
+        </div>
+        
+        <div class="tab-content">
+            <!-- Overall Stats Tab -->
+            <div class="tab-pane active" id="overall-tab">
+                <div class="team-stats">
+                    <div class="team blue-team">
+                        <h3>Blue Team</h3>
+                        <div class="kda">KDA: <span id="blue-kda">0/0/0</span></div>
+                        <div class="gold">Gold: <span id="blue-gold">0</span></div>
+                        <div class="objectives">
+                            <h4>Objectives</h4>
+                            <div id="blue-objectives"></div>
+                        </div>
+                    </div>
+                    <div class="team red-team">
+                        <h3>Red Team</h3>
+                        <div class="kda">KDA: <span id="red-kda">0/0/0</span></div>
+                        <div class="gold">Gold: <span id="red-gold">0</span></div>
+                        <div class="objectives">
+                            <h4>Objectives</h4>
+                            <div id="red-objectives"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Player Stats Tab -->
+            <div class="tab-pane" id="player-tab">
+                <div class="player-selector">
+                    <select id="playerSelect">
+                        {% for participant in participants %}
+                        <option value="{{ participant.participant_id }}">
+                            {{ participant.summoner_name }} ({{ participant.champion_name }})
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="player-stats">
+                    <div class="kda">KDA: <span id="player-kda">0/0/0</span></div>
+                    <div class="cs">CS: <span id="player-cs">0</span></div>
+                    <div class="gold">Gold: <span id="player-gold">0</span></div>
+                    <div class="level">Level: <span id="player-level">1</span></div>
+                    <div class="items">
+                        <h4>Items</h4>
+                        <div id="player-items"></div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Events Tab -->
+            <div class="tab-pane" id="events-tab">
+                <div class="events-list" id="eventsList">
+                    <!-- Events will be populated dynamically -->
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- JavaScript for replay functionality -->
+<script>
+// Replay data
+let replayData = null;
+let currentGameState = null;
+let currentTimestamp = 0;
+
+// Canvas setup
+const canvas = document.getElementById('replayMap');
+const ctx = canvas.getContext('2d');
+
+// Timeline setup
+const timeline = document.getElementById('timeline');
+const currentTimeDisplay = document.getElementById('currentTime');
+const totalTimeDisplay = document.getElementById('totalTime');
+
+// Load replay data
+async function loadReplayData() {
+    try {
+        const response = await fetch(`/api/replays/{{ match_id }}`);
+        replayData = await response.json();
+        
+        // Set timeline max value
+        timeline.max = replayData.game_duration;
+        
+        // Format total time
+        totalTimeDisplay.textContent = formatTime(replayData.game_duration);
+        
+        // Initial game state
+        await updateGameState(0);
+        
+    } catch (error) {
+        console.error('Error loading replay data:', error);
+    }
+}
+
+// Update game state
+async function updateGameState(timestamp) {
+    try {
+        const response = await fetch(`/api/replays/{{ match_id }}/gamestate?timestamp=${timestamp}`);
+        currentGameState = await response.json();
+        currentTimestamp = timestamp;
+        
+        // Update UI
+        updateMap();
+        updateStats();
+        updateEvents();
+        
+    } catch (error) {
+        console.error('Error updating game state:', error);
+    }
+}
+
+// Timeline event handlers
+timeline.addEventListener('input', (e) => {
+    const timestamp = parseInt(e.target.value);
+    currentTimeDisplay.textContent = formatTime(timestamp);
+});
+
+timeline.addEventListener('change', (e) => {
+    const timestamp = parseInt(e.target.value);
+    updateGameState(timestamp);
+});
+
+// Format time (milliseconds to MM:SS)
+function formatTime(ms) {
+    const totalSeconds = Math.floor(ms / 1000);
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+}
+
+// Update map visualization
+function updateMap() {
+    if (!currentGameState) return;
+    
+    // Clear canvas
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    
+    // Draw map background
+    drawMapBackground();
+    
+    // Draw champions
+    currentGameState.champion_states.forEach(state => {
+        drawChampion(state);
+    });
+    
+    // Draw events
+    currentGameState.recent_events.forEach(event => {
+        drawEvent(event);
+    });
+}
+
+// Draw map background
+function drawMapBackground() {
+    // Load and draw the map image
+    const mapImage = new Image();
+    mapImage.src = '/static/replay/maps/summoners_rift.png';
+    
+    // Draw the map with proper scaling
+    const scale = Math.min(canvas.width / mapImage.width, canvas.height / mapImage.height);
+    const x = (canvas.width - mapImage.width * scale) / 2;
+    const y = (canvas.height - mapImage.height * scale) / 2;
+    
+    ctx.drawImage(mapImage, x, y, mapImage.width * scale, mapImage.height * scale);
+    
+    // Draw grid lines for better position reference
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+    ctx.lineWidth = 1;
+    
+    // Draw vertical lines
+    for (let i = 0; i <= 10; i++) {
+        const x = canvas.width * (i / 10);
+        ctx.beginPath();
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, canvas.height);
+        ctx.stroke();
+    }
+    
+    // Draw horizontal lines
+    for (let i = 0; i <= 10; i++) {
+        const y = canvas.height * (i / 10);
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(canvas.width, y);
+        ctx.stroke();
+    }
+}
+
+// Draw champion
+function drawChampion(state) {
+    const championImage = new Image();
+    championImage.src = `/static/replay/champions/${state.champion_name.toLowerCase()}.png`;
+    
+    // Calculate position on canvas
+    const x = (state.position.x / 15000) * canvas.width;
+    const y = (state.position.y / 15000) * canvas.height;
+    
+    // Draw champion icon
+    const iconSize = 32;
+    ctx.drawImage(championImage, x - iconSize/2, y - iconSize/2, iconSize, iconSize);
+    
+    // Draw champion name
+    ctx.fillStyle = state.team_id === 100 ? '#3498db' : '#e74c3c';
+    ctx.font = '12px Arial';
+    ctx.textAlign = 'center';
+    ctx.fillText(state.summoner_name, x, y - iconSize/2 - 5);
+    
+    // Draw level indicator
+    ctx.beginPath();
+    ctx.arc(x, y, 10, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+    ctx.fill();
+    ctx.fillStyle = 'white';
+    ctx.font = '10px Arial';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(state.current_level, x, y);
+}
+
+// Draw event
+function drawEvent(event) {
+    const x = (event.position.x / 15000) * canvas.width;
+    const y = (event.position.y / 15000) * canvas.height;
+    
+    // Draw event marker based on type
+    switch(event.type) {
+        case 'CHAMPION_KILL':
+            drawKillMarker(x, y, event.team_id);
+            break;
+        case 'ELITE_MONSTER_KILL':
+            drawObjectiveMarker(x, y, event.monster_type);
+            break;
+        case 'BUILDING_KILL':
+            drawBuildingMarker(x, y, event.building_type);
+            break;
+        case 'WARD_PLACED':
+            drawWardMarker(x, y, event.ward_type);
+            break;
+    }
+}
+
+function drawKillMarker(x, y, teamId) {
+    ctx.beginPath();
+    ctx.arc(x, y, 15, 0, Math.PI * 2);
+    ctx.fillStyle = teamId === 100 ? 'rgba(52, 152, 219, 0.3)' : 'rgba(231, 76, 60, 0.3)';
+    ctx.fill();
+    ctx.strokeStyle = teamId === 100 ? '#3498db' : '#e74c3c';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+}
+
+function drawObjectiveMarker(x, y, monsterType) {
+    const icon = new Image();
+    icon.src = `/static/replay/icons/${monsterType.toLowerCase()}.png`;
+    ctx.drawImage(icon, x - 16, y - 16, 32, 32);
+}
+
+function drawBuildingMarker(x, y, buildingType) {
+    ctx.beginPath();
+    ctx.rect(x - 10, y - 10, 20, 20);
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+    ctx.fill();
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+}
+
+function drawWardMarker(x, y, wardType) {
+    ctx.beginPath();
+    ctx.arc(x, y, 8, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+    ctx.fill();
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+}
+
+// Update stats display
+function updateStats() {
+    if (!currentGameState) return;
+    
+    // Update team stats
+    updateTeamStats();
+    
+    // Update player stats if player tab is active
+    if (document.getElementById('player-tab').classList.contains('active')) {
+        updatePlayerStats();
+    }
+}
+
+// Update team stats
+function updateTeamStats() {
+    // TODO: Implement team stats update
+}
+
+// Update player stats
+function updatePlayerStats() {
+    // TODO: Implement player stats update
+}
+
+// Update events list
+function updateEvents() {
+    if (!currentGameState) return;
+    
+    const eventsList = document.getElementById('eventsList');
+    eventsList.innerHTML = '';
+    
+    currentGameState.recent_events.forEach(event => {
+        const eventElement = document.createElement('div');
+        eventElement.className = 'event-item';
+        eventElement.textContent = formatEvent(event);
+        eventsList.appendChild(eventElement);
+    });
+}
+
+// Format event for display
+function formatEvent(event) {
+    // TODO: Implement event formatting
+    return `${formatTime(event.timestamp)} - ${event.type}`;
+}
+
+// Tab switching
+document.querySelectorAll('.tab-button').forEach(button => {
+    button.addEventListener('click', () => {
+        // Remove active class from all buttons and panes
+        document.querySelectorAll('.tab-button').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+        
+        // Add active class to clicked button and corresponding pane
+        button.classList.add('active');
+        document.getElementById(`${button.dataset.tab}-tab`).classList.add('active');
+        
+        // Update stats if needed
+        updateStats();
+    });
+});
+
+// Player selection
+document.getElementById('playerSelect').addEventListener('change', (e) => {
+    updatePlayerStats();
+});
+
+// Initialize
+loadReplayData();
+</script>
+
+<style>
+.replay-container {
+    display: flex;
+    gap: 20px;
+    padding: 20px;
+}
+
+.replay-view {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+#replayMap {
+    border: 1px solid #ccc;
+    background: #1a1a1a;
+}
+
+.timeline-container {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.timeline-labels {
+    display: flex;
+    justify-content: space-between;
+}
+
+.data-tabs {
+    width: 300px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+}
+
+.tab-buttons {
+    display: flex;
+    border-bottom: 1px solid #ccc;
+}
+
+.tab-button {
+    flex: 1;
+    padding: 10px;
+    border: none;
+    background: none;
+    cursor: pointer;
+}
+
+.tab-button.active {
+    background: #f0f0f0;
+    border-bottom: 2px solid #007bff;
+}
+
+.tab-content {
+    padding: 20px;
+}
+
+.tab-pane {
+    display: none;
+}
+
+.tab-pane.active {
+    display: block;
+}
+
+.team-stats {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.team {
+    padding: 10px;
+    border-radius: 4px;
+}
+
+.blue-team {
+    background: rgba(0, 0, 255, 0.1);
+}
+
+.red-team {
+    background: rgba(255, 0, 0, 0.1);
+}
+
+.events-list {
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.event-item {
+    padding: 5px;
+    border-bottom: 1px solid #eee;
+}
+
+.player-selector {
+    margin-bottom: 20px;
+}
+
+#playerSelect {
+    width: 100%;
+    padding: 5px;
+}
+</style>
+{% endblock %} 
