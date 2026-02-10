@@ -174,4 +174,20 @@ class RiotAPIClient:
         headers = {
             "X-Riot-Token": self.api_key
         }
-        return await self._make_request(url, headers) 
+        return await self._make_request(url, headers)
+
+    async def get_active_game(self, puuid: str, region: str) -> Optional[Dict]:
+        """Get active game info using Spectator v5 API.
+
+        Returns None (via 404) if the player is not in a game.
+        """
+        url = f"https://{region}.api.riotgames.com/lol/spectator/v5/active-games/by-summoner/{puuid}"
+        headers = {
+            "X-Riot-Token": self.api_key
+        }
+        try:
+            return await self._make_request(url, headers)
+        except HTTPException as e:
+            if e.status_code == 404:
+                return None
+            raise

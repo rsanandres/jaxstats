@@ -297,6 +297,74 @@ async def get_match_timeline(match_id: str, region: str = "na1"):
         log_debug("ERROR", error_msg, sys.exc_info())
         raise HTTPException(status_code=500, detail=error_msg)
 
+@app.get("/api/live-game/{summoner_name}")
+async def get_live_game(summoner_name: str, region: str = "na1"):
+    """Get live game data for a summoner currently in game."""
+    try:
+        if '#' not in summoner_name:
+            raise ValueError("Summoner name must be in the format 'GameName#TAG'")
+
+        game_name, tag_line = summoner_name.split('#')
+        account = await riot_client.get_account_by_riot_id(game_name, tag_line, region)
+        puuid = account['puuid']
+
+        game_data = await riot_client.get_active_game(puuid, region)
+        if not game_data:
+            raise HTTPException(status_code=404, detail="Not currently in a game")
+
+        # Enrich each participant with recent stats and GPI
+        participants = game_data.get("participants", [])
+        enriched = []
+        for p in participants:
+            player_puuid = p.get("puuid", "")
+            entry = {
+                "summonerName": p.get("riotId", p.get("summonerId", "Unknown")),
+                "championId": p.get("championId", 0),
+                "teamId": p.get("teamId", 0),
+                "spell1Id": p.get("spell1Id", 0),
+                "spell2Id": p.get("spell2Id", 0),
+            }
+
+            # Try to get recent match history for GPI (best effort, don't block on errors)
+            try:
+                recent_ids = await riot_client.get_match_history(player_puuid, region, count=5)
+                if recent_ids:
+                    features_list = []
+                    for mid in recent_ids[:3]:  # Limit to 3 for speed
+                        md = await riot_client.get_match_details(mid, region)
+                        if md:
+                            participant_data = _find_player_participant(md, player_puuid)
+                            if participant_data:
+                                duration = md.get("info", {}).get("gameDuration", 0)
+                                feats = extract_participant_features(participant_data, duration)
+                                feats["champion_name"] = participant_data.get("championName", "")
+                                feats["position"] = participant_data.get("teamPosition", "")
+                                features_list.append(feats)
+
+                    if features_list:
+                        gpi = compute_full_gpi(features_list)
+                        wins = sum(1 for f in features_list if f.get("win", 0) > 0.5)
+                        entry["gpi"] = gpi
+                        entry["recent_win_rate"] = round(wins / len(features_list) * 100, 1)
+            except Exception:
+                pass  # Don't fail the whole request for one player
+
+            enriched.append(entry)
+
+        return {
+            "game_id": game_data.get("gameId"),
+            "game_mode": game_data.get("gameMode", "CLASSIC"),
+            "game_type": game_data.get("gameType", ""),
+            "game_length": game_data.get("gameLength", 0),
+            "participants": enriched,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        error_msg = f"Error fetching live game: {str(e)}"
+        log_debug("ERROR", error_msg, sys.exc_info())
+        raise HTTPException(status_code=500, detail=error_msg)
+
 @app.get("/api/champion-stats/{summoner_name}")
 async def get_champion_stats(summoner_name: str, region: str = "na1", match_count: int = 20):
     """Get champion statistics for a summoner."""
