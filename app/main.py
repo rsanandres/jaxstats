@@ -17,6 +17,8 @@ from .analysis.stats_analyzer import StatsAnalyzer
 from .ml.xgb_model import JaxStatsModels
 from .ml.features import extract_participant_features, extract_all_participants
 from .ml.gpi import compute_full_gpi
+from .analysis.suggestion_engine import generate_suggestion_async
+from .llm.ollama_client import check_ollama_health
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
