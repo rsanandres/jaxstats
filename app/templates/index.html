@@ -4,9 +4,14 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>JaxStats - League of Legends Stats</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='28' font-size='28'>⚔</text></svg>">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Orbitron:wght@700;900&display=swap" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', path='css/style.css') }}">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <script src="https://unpkg.com/lucide@0.460.0/dist/umd/lucide.min.js"></script>
 </head>
 <body class="bg-gray-950 text-gray-200 min-h-screen">
     <div class="max-w-6xl mx-auto px-4 py-6">
@@ -17,9 +22,9 @@
             </h1>
             <p class="text-gray-500 text-sm mt-1">League of Legends Performance Dashboard</p>
             <nav class="flex justify-center gap-1 mt-4">
-                <button id="tabStats" class="tab-btn active" data-tab="statsTab">Stats</button>
-                <button id="tabCompare" class="tab-btn" data-tab="compareTab">Head to Head</button>
-                <button id="tabLive" class="tab-btn" data-tab="liveTab">Live Game</button>
+                <button id="tabStats" class="tab-btn active" data-tab="statsTab"><i data-lucide="bar-chart-2" class="inline w-3.5 h-3.5 mr-1"></i>Stats</button>
+                <button id="tabCompare" class="tab-btn" data-tab="compareTab"><i data-lucide="users" class="inline w-3.5 h-3.5 mr-1"></i>Head to Head</button>
+                <button id="tabLive" class="tab-btn" data-tab="liveTab"><i data-lucide="radio" class="inline w-3.5 h-3.5 mr-1"></i>Live Game</button>
             </nav>
         </header>
 
@@ -35,25 +40,73 @@
                 </select>
                 <button type="submit" class="btn-primary">Search</button>
                 <button type="button" id="refreshBtn" class="btn-secondary" title="Refresh">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
-                    </svg>
+                    <i data-lucide="refresh-cw" class="w-4 h-4"></i>
                 </button>
             </div>
         </form>
 
-        <div id="loading" class="hidden text-center py-12">
-            <div class="loading-spinner mx-auto"></div>
-            <p class="text-gray-500 mt-3 text-sm">Loading stats...</p>
+        <div id="loading" class="hidden py-6">
+            <div class="text-center mb-6">
+                <div class="loading-spinner mx-auto"></div>
+                <p class="text-gray-500 mt-3 text-sm">Loading stats...</p>
+            </div>
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                <div class="panel skeleton-panel"><div class="skeleton" style="height:220px"></div></div>
+                <div class="panel skeleton-panel col-span-2">
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+                        <div class="skeleton" style="height:70px"></div>
+                        <div class="skeleton" style="height:70px"></div>
+                        <div class="skeleton" style="height:70px"></div>
+                        <div class="skeleton" style="height:70px"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                <div class="panel skeleton-panel"><div class="skeleton" style="height:200px"></div></div>
+                <div class="panel skeleton-panel"><div class="skeleton" style="height:200px"></div></div>
+            </div>
+        </div>
+
+        <!-- Empty State (before first search) -->
+        <div id="emptyState" class="text-center py-16">
+            <div class="text-5xl mb-4">&#9876;&#65039;</div>
+            <h2 class="text-xl font-semibold text-gray-200 mb-2">Search a Summoner</h2>
+            <p class="text-sm text-gray-400 max-w-sm mx-auto">Enter a Summoner#TAG above to see performance stats, GPI skill scores, match history, and more.</p>
+        </div>
+
+        <!-- Summoner Profile Banner -->
+        <div id="profileBanner" class="hidden mb-6">
+            <div class="panel flex items-center justify-between flex-wrap gap-4">
+                <div class="flex items-center gap-4">
+                    <div>
+                        <h2 id="profileName" class="text-xl font-bold text-gray-100"></h2>
+                        <span id="profileRegion" class="text-xs font-medium text-gray-400 uppercase tracking-wider"></span>
+                    </div>
+                </div>
+                <div class="flex items-center gap-6">
+                    <div class="text-center">
+                        <div id="profileGPI" class="text-2xl font-bold text-blue-400" style="font-family:'Orbitron',sans-serif"></div>
+                        <div id="profileGPITier" class="text-xs text-gray-400 mt-0.5"></div>
+                    </div>
+                    <div class="text-center">
+                        <div id="profileWR" class="text-lg font-semibold" style="font-family:'Orbitron',sans-serif"></div>
+                        <div class="text-xs text-gray-400">Win Rate</div>
+                    </div>
+                    <div class="text-center">
+                        <div id="profileKDA" class="text-lg font-semibold text-gray-100" style="font-family:'Orbitron',sans-serif"></div>
+                        <div class="text-xs text-gray-400">KDA</div>
+                    </div>
+                </div>
+            </div>
         </div>
 
         <!-- ============ STATS TAB ============ -->
-        <div id="statsTab" class="tab-content space-y-6">
+        <div id="statsTab" class="tab-content space-y-6 hidden">
             <!-- GPI Radar + Overall Stats Row -->
             <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
                 <!-- GPI Radar Chart -->
                 <div class="panel col-span-1">
-                    <h2 class="panel-title">GPI Score</h2>
+                    <h2 class="panel-title"><i data-lucide="radar" class="inline w-3.5 h-3.5 mr-1.5 opacity-50"></i>GPI Score</h2>
                     <div class="flex items-center justify-center" style="height:220px">
                         <canvas id="gpiRadar"></canvas>
                     </div>
@@ -62,7 +115,7 @@
                 </div>
                 <!-- Stat Cards -->
                 <div class="panel col-span-2">
-                    <h2 class="panel-title">Overview</h2>
+                    <h2 class="panel-title"><i data-lucide="layout-dashboard" class="inline w-3.5 h-3.5 mr-1.5 opacity-50"></i>Overview</h2>
                     <div id="overallStats" class="grid grid-cols-2 md:grid-cols-4 gap-3"></div>
                     <!-- Trend indicators -->
                     <div id="trendIndicators" class="flex flex-wrap gap-2 mt-4"></div>
@@ -96,13 +149,13 @@
             <!-- Charts Row -->
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div class="panel">
-                    <h2 class="panel-title">Performance Trend</h2>
+                    <h2 class="panel-title"><i data-lucide="trending-up" class="inline w-3.5 h-3.5 mr-1.5 opacity-50"></i>Performance Trend</h2>
                     <div style="position:relative;height:200px">
                         <canvas id="perfTrendChart"></canvas>
                     </div>
                 </div>
                 <div class="panel">
-                    <h2 class="panel-title">KDA Trend</h2>
+                    <h2 class="panel-title"><i data-lucide="swords" class="inline w-3.5 h-3.5 mr-1.5 opacity-50"></i>KDA Trend</h2>
                     <div style="position:relative;height:200px">
                         <canvas id="kdaTrendChart"></canvas>
                     </div>
@@ -111,13 +164,13 @@
 
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div class="panel">
-                    <h2 class="panel-title">Role Distribution</h2>
+                    <h2 class="panel-title"><i data-lucide="pie-chart" class="inline w-3.5 h-3.5 mr-1.5 opacity-50"></i>Role Distribution</h2>
                     <div class="flex justify-center" style="height:200px">
                         <canvas id="roleChart"></canvas>
                     </div>
                 </div>
                 <div class="panel">
-                    <h2 class="panel-title">Damage Breakdown</h2>
+                    <h2 class="panel-title"><i data-lucide="flame" class="inline w-3.5 h-3.5 mr-1.5 opacity-50"></i>Damage Breakdown</h2>
                     <div style="position:relative;height:200px">
                         <canvas id="dmgChart"></canvas>
                     </div>
@@ -126,18 +179,18 @@
 
             <!-- Champion Stats Table -->
             <div class="panel">
-                <h2 class="panel-title">Champion Statistics</h2>
+                <h2 class="panel-title"><i data-lucide="crown" class="inline w-3.5 h-3.5 mr-1.5 opacity-50"></i>Champion Statistics</h2>
                 <div class="overflow-x-auto">
-                    <table class="w-full text-sm">
+                    <table id="championTable" class="w-full text-sm">
                         <thead>
-                            <tr class="text-left text-xs text-gray-500 uppercase tracking-wider">
-                                <th class="p-2">Champion</th>
-                                <th class="p-2">Games</th>
-                                <th class="p-2">Win%</th>
-                                <th class="p-2">KDA</th>
+                            <tr class="text-left text-xs text-gray-400 uppercase tracking-wider">
+                                <th class="p-2 cursor-pointer hover:text-gray-200 select-none" data-sort="champ" onclick="sortChampTable('champ')">Champion<span class="sort-arrow text-blue-400"></span></th>
+                                <th class="p-2 cursor-pointer hover:text-gray-200 select-none" data-sort="games_played" onclick="sortChampTable('games_played')">Games<span class="sort-arrow text-blue-400"></span></th>
+                                <th class="p-2 cursor-pointer hover:text-gray-200 select-none" data-sort="win_rate" onclick="sortChampTable('win_rate')">Win%<span class="sort-arrow text-blue-400"></span></th>
+                                <th class="p-2 cursor-pointer hover:text-gray-200 select-none" data-sort="kda" onclick="sortChampTable('kda')">KDA<span class="sort-arrow text-blue-400"></span></th>
                                 <th class="p-2">Avg K/D/A</th>
-                                <th class="p-2">Avg Dmg</th>
-                                <th class="p-2">Avg Gold</th>
+                                <th class="p-2 cursor-pointer hover:text-gray-200 select-none" data-sort="avg_damage" onclick="sortChampTable('avg_damage')">Avg Dmg<span class="sort-arrow text-blue-400"></span></th>
+                                <th class="p-2 cursor-pointer hover:text-gray-200 select-none" data-sort="avg_gold" onclick="sortChampTable('avg_gold')">Avg Gold<span class="sort-arrow text-blue-400"></span></th>
                             </tr>
                         </thead>
                         <tbody id="championStatsBody"></tbody>
@@ -147,7 +200,7 @@
 
             <!-- Match History -->
             <div class="panel">
-                <h2 class="panel-title">Recent Matches</h2>
+                <h2 class="panel-title"><i data-lucide="history" class="inline w-3.5 h-3.5 mr-1.5 opacity-50"></i>Recent Matches</h2>
                 <div id="matchList" class="space-y-2"></div>
             </div>
         </div>
@@ -183,7 +236,7 @@
         <!-- ============ LIVE GAME TAB ============ -->
         <div id="liveTab" class="tab-content hidden space-y-6">
             <div class="panel">
-                <h2 class="panel-title">Live Game</h2>
+                <h2 class="panel-title"><i data-lucide="radio" class="inline w-3.5 h-3.5 mr-1.5 opacity-50"></i>Live Game</h2>
                 <p class="text-gray-500 text-sm mb-4">Search for a summoner above to check if they're in game</p>
                 <div id="liveGameContent"></div>
             </div>
@@ -191,11 +244,18 @@
 
         <!-- Error -->
         <div id="error" class="hidden bg-red-900/30 border border-red-800 text-red-200 p-4 rounded-lg mt-4"></div>
+
+        <!-- Footer -->
+        <footer class="text-center text-xs text-gray-500 mt-12 pb-6 border-t border-gray-800 pt-6">
+            <p>JaxStats is not endorsed by Riot Games and does not reflect the views or opinions of Riot Games or anyone officially involved in producing or managing Riot Games properties.</p>
+            <p class="mt-1 text-gray-600">Riot Games and League of Legends are trademarks or registered trademarks of Riot Games, Inc.</p>
+        </footer>
     </div>
 
     <!-- Toast container -->
     <div id="toastContainer" class="fixed bottom-4 right-4 z-50 space-y-2"></div>
 
-    <script src="{{ url_for('static', path='js/main.js') }}?v=2"></script>
+    <script src="{{ url_for('static', path='js/main.js') }}?v=4"></script>
+    <script>lucide.createIcons();</script>
 </body>
 </html>

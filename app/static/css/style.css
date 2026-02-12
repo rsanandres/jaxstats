@@ -1,29 +1,48 @@
 /* ============ BASE ============ */
 * { box-sizing: border-box; }
-body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background-color: #030712;
+    color: #e2e8f0;
+}
+
+/* Brighten Tailwind gray-500 / gray-600 for dark bg readability */
+.text-gray-500 { color: #94a3b8 !important; }
+.text-gray-600 { color: #78889a !important; }
 
 ::-webkit-scrollbar { width: 6px; }
 ::-webkit-scrollbar-track { background: #0a0a0a; }
 ::-webkit-scrollbar-thumb { background: #1e293b; border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: #334155; }
 
+/* ============ TYPOGRAPHY — ORBITRON (numbers/values only) ============ */
+.stat-card .value,
+#gpiOverall,
+.score-badge,
+.tier-badge {
+    font-family: 'Orbitron', sans-serif;
+}
+
 /* ============ TABS ============ */
 .tab-btn {
     padding: 0.5rem 1.25rem;
     font-size: 0.8rem;
     font-weight: 500;
-    color: #64748b;
+    color: #94a3b8;
     background: transparent;
     border: 1px solid transparent;
     border-radius: 0.5rem;
     cursor: pointer;
-    transition: all 0.15s;
+    transition: all 0.2s;
+    display: inline-flex;
+    align-items: center;
 }
-.tab-btn:hover { color: #94a3b8; }
+.tab-btn:hover { color: #cbd5e1; }
 .tab-btn.active {
     color: #e2e8f0;
     background: #1e293b;
     border-color: #334155;
+    box-shadow: 0 0 12px rgba(59, 130, 246, 0.15), inset 0 -2px 0 #3b82f6;
 }
 
 /* ============ FORMS ============ */
@@ -39,8 +58,12 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
     color: #e2e8f0;
     font-size: 0.85rem;
     outline: none;
+    transition: border-color 0.2s, box-shadow 0.2s;
 }
-.form-input:focus { border-color: #3b82f6; }
+.form-input:focus {
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
 .form-select {
     padding: 0.5rem 0.75rem;
     background: #0f172a;
@@ -50,8 +73,12 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
     font-size: 0.85rem;
     outline: none;
     min-width: 70px;
+    transition: border-color 0.2s, box-shadow 0.2s;
 }
-.form-select:focus { border-color: #3b82f6; }
+.form-select:focus {
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
 
 .btn-primary {
     padding: 0.5rem 1.25rem;
@@ -62,9 +89,12 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
     font-size: 0.85rem;
     font-weight: 500;
     cursor: pointer;
-    transition: background 0.15s;
+    transition: background 0.15s, box-shadow 0.15s;
 }
-.btn-primary:hover { background: #2563eb; }
+.btn-primary:hover {
+    background: #2563eb;
+    box-shadow: 0 0 16px rgba(59, 130, 246, 0.3);
+}
 
 .btn-secondary {
     padding: 0.5rem;
@@ -80,17 +110,21 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 /* ============ PANELS ============ */
 .panel {
     background: #0f172a;
-    border: 1px solid #1e293b;
+    border: 1px solid rgba(148, 163, 184, 0.12);
     border-radius: 0.75rem;
     padding: 1.25rem;
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(148, 163, 184, 0.06);
+    transition: box-shadow 0.3s;
 }
 .panel-title {
-    font-size: 0.8rem;
-    font-weight: 600;
-    color: #64748b;
+    font-size: 0.7rem;
+    font-weight: 700;
+    color: #94a3b8;
     text-transform: uppercase;
-    letter-spacing: 0.05em;
+    letter-spacing: 0.1em;
     margin-bottom: 1rem;
+    display: flex;
+    align-items: center;
 }
 
 /* ============ STAT CARDS ============ */
@@ -100,8 +134,13 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
     border-radius: 0.5rem;
     text-align: center;
     border: 1px solid #1e293b;
+    transition: transform 0.2s, box-shadow 0.2s;
 }
-.stat-card .label { color: #64748b; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em; }
+.stat-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+.stat-card .label { color: #94a3b8; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em; }
 .stat-card .value { color: #e2e8f0; font-size: 1.25rem; font-weight: 600; margin-top: 0.25rem; }
 
 /* ============ SCORE BADGES ============ */
@@ -128,6 +167,11 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
     color: #94a3b8;
 }
 
+/* ============ GPI OVERALL — NEON GLOW ============ */
+#gpiOverall {
+    text-shadow: 0 0 20px rgba(59, 130, 246, 0.5), 0 0 40px rgba(59, 130, 246, 0.2);
+}
+
 /* ============ TREND INDICATORS ============ */
 .trend-pill {
     display: inline-flex;
@@ -148,10 +192,14 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
     padding: 0.75rem 1rem;
     border-radius: 0.5rem;
     cursor: pointer;
-    transition: background 0.15s;
+    transition: background 0.15s, transform 0.2s, box-shadow 0.2s;
     border: 1px solid #1e293b;
 }
-.match-card:hover { background: #111827; }
+.match-card:hover {
+    background: #111827;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+}
 
 .champion-icon {
     width: 2.25rem;
@@ -168,8 +216,16 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
     font-size: 0.7rem;
     font-weight: 600;
 }
-.win-indicator.win { background: #064e3b; color: #6ee7b7; }
-.win-indicator.loss { background: #7f1d1d; color: #fca5a5; }
+.win-indicator.win {
+    background: #064e3b;
+    color: #6ee7b7;
+    box-shadow: 0 0 8px rgba(110, 231, 183, 0.3);
+}
+.win-indicator.loss {
+    background: #7f1d1d;
+    color: #fca5a5;
+    box-shadow: 0 0 8px rgba(252, 165, 165, 0.3);
+}
 
 .match-dropdown {
     margin-top: 0.75rem;
@@ -213,6 +269,11 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
     background: #0a0f1a;
     border-radius: 0.375rem;
     border: 1px solid #1e293b;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+.player-row:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 }
 
 /* ============ LOADING ============ */
@@ -226,15 +287,41 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 }
 @keyframes spin { to { transform: rotate(360deg); } }
 
+/* ============ SKELETON LOADER ============ */
+.skeleton {
+    background: linear-gradient(90deg, #1e293b 25%, #334155 50%, #1e293b 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite;
+    border-radius: 0.5rem;
+}
+.skeleton-panel {
+    overflow: hidden;
+}
+@keyframes shimmer {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+}
+
+/* ============ FADE-IN ANIMATION ============ */
+@keyframes fadeSlideUp {
+    from { opacity: 0; transform: translateY(12px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+.fade-in {
+    animation: fadeSlideUp 0.4s ease-out forwards;
+    opacity: 0;
+}
+
 /* ============ TOAST ============ */
 .toast {
     padding: 0.75rem 1rem;
     border-radius: 0.5rem;
     font-size: 0.8rem;
     animation: slideIn 0.3s ease-out;
+    backdrop-filter: blur(8px);
 }
-.toast.success { background: #064e3b; color: #6ee7b7; border: 1px solid #065f46; }
-.toast.error { background: #7f1d1d; color: #fca5a5; border: 1px solid #991b1b; }
+.toast.success { background: rgba(6, 78, 59, 0.9); color: #6ee7b7; border: 1px solid #065f46; }
+.toast.error { background: rgba(127, 29, 29, 0.9); color: #fca5a5; border: 1px solid #991b1b; }
 @keyframes slideIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 
 /* ============ ADVANCED STATS ============ */
@@ -249,6 +336,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
     border-radius: 4px;
     background: linear-gradient(90deg, #3b82f6, #22c55e);
     transition: width 0.3s;
+    box-shadow: 0 0 6px rgba(59, 130, 246, 0.3);
 }
 .mini-stat {
     display: flex;
@@ -259,7 +347,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
     font-size: 0.75rem;
 }
 .mini-stat:last-child { border-bottom: none; }
-.mini-stat .label { color: #64748b; }
+.mini-stat .label { color: #94a3b8; }
 .mini-stat .value { color: #e2e8f0; font-weight: 600; font-variant-numeric: tabular-nums; }
 
 .archetype-badge {

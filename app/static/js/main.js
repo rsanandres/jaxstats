@@ -44,6 +44,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 async function fetchStats(useCache = true) {
     showLoading(true);
     hideError();
+    document.getElementById('emptyState').classList.add('hidden');
 
     try {
         const resp = await fetch('/api/analyze', {
@@ -61,6 +62,10 @@ async function fetchStats(useCache = true) {
             throw new Error(err.detail || 'Failed to fetch stats');
         }
         const data = await resp.json();
+
+        // Hide empty state, show profile + stats
+        document.getElementById('emptyState').classList.add('hidden');
+        renderProfileBanner(data);
         renderDashboard(data);
 
         // Show stats tab
@@ -80,6 +85,46 @@ async function fetchStats(useCache = true) {
     }
 }
 
+// ============ GPI TIER ============
+function gpiTierLabel(score) {
+    if (score >= 80) return { label: 'Elite', color: '#fbbf24' };
+    if (score >= 65) return { label: 'Great', color: '#22c55e' };
+    if (score >= 50) return { label: 'Good', color: '#3b82f6' };
+    if (score >= 35) return { label: 'Average', color: '#94a3b8' };
+    return { label: 'Below Average', color: '#f87171' };
+}
+
+// ============ PROFILE BANNER ============
+function renderProfileBanner(data) {
+    const banner = document.getElementById('profileBanner');
+    banner.classList.remove('hidden');
+    banner.querySelector('.panel').classList.add('fade-in');
+
+    document.getElementById('profileName').textContent = currentSummoner;
+    document.getElementById('profileRegion').textContent = currentRegion.replace('1', '').toUpperCase();
+
+    const gpi = data.gpi;
+    const stats = data.overall_stats || {};
+    const wr = pf(stats.win_rate);
+    const kda = pf(stats.kda);
+
+    if (gpi && gpi.overall) {
+        const tier = gpiTierLabel(gpi.overall);
+        document.getElementById('profileGPI').textContent = gpi.overall.toFixed(0);
+        document.getElementById('profileGPITier').textContent = `GPI \u2022 ${tier.label}`;
+        document.getElementById('profileGPITier').style.color = tier.color;
+        document.getElementById('gpiTier').textContent = tier.label;
+        document.getElementById('gpiTier').style.color = tier.color;
+    }
+
+    const wrEl = document.getElementById('profileWR');
+    wrEl.textContent = wr.toFixed(1) + '%';
+    wrEl.className = 'text-lg font-semibold ' + (wr >= 55 ? 'text-green-400' : wr <= 45 ? 'text-red-400' : 'text-gray-100');
+    wrEl.style.fontFamily = "'Orbitron', sans-serif";
+
+    document.getElementById('profileKDA').textContent = kda.toFixed(2);
+}
+
 // ============ RENDER DASHBOARD ============
 function renderDashboard(data) {
     renderOverallStats(data.overall_stats, data.gpi);
@@ -89,6 +134,17 @@ function renderDashboard(data) {
     renderChampionStats(data.champion_stats);
     renderAdvancedStats(data.advanced_stats);
     renderCharts(data);
+
+    // Refresh Lucide icons after dynamic content render
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+
+    // Apply staggered fade-in to panels
+    document.querySelectorAll('#statsTab .panel').forEach((panel, i) => {
+        panel.classList.remove('fade-in');
+        void panel.offsetWidth; // force reflow
+        panel.style.animationDelay = `${i * 0.06}s`;
+        panel.classList.add('fade-in');
+    });
 }
 
 function renderOverallStats(stats, gpi) {
@@ -99,21 +155,21 @@ function renderOverallStats(stats, gpi) {
 
     document.getElementById('overallStats').innerHTML = `
         <div class="stat-card">
-            <div class="label">Win Rate</div>
+            <div class="label"><i data-lucide="trophy" class="inline w-3 h-3 mr-1 opacity-40"></i>Win Rate</div>
             <div class="value ${wrClass}">${wr.toFixed(1)}%</div>
             <div class="text-xs text-gray-500">${pi(stats.wins)}W ${pi(stats.losses)}L</div>
         </div>
         <div class="stat-card">
-            <div class="label">KDA</div>
+            <div class="label"><i data-lucide="target" class="inline w-3 h-3 mr-1 opacity-40"></i>KDA</div>
             <div class="value">${kda.toFixed(2)}</div>
             <div class="text-xs text-gray-500">${pi(stats.kills)}/${pi(stats.deaths)}/${pi(stats.assists)}</div>
         </div>
         <div class="stat-card">
-            <div class="label">Matches</div>
+            <div class="label"><i data-lucide="hash" class="inline w-3 h-3 mr-1 opacity-40"></i>Matches</div>
             <div class="value">${pi(stats.total_matches)}</div>
         </div>
         <div class="stat-card">
-            <div class="label">Avg Vision</div>
+            <div class="label"><i data-lucide="eye" class="inline w-3 h-3 mr-1 opacity-40"></i>Avg Vision</div>
             <div class="value">${stats.total_matches ? Math.round(pi(stats.vision_score)/pi(stats.total_matches)) : 0}</div>
         </div>
     `;
@@ -131,17 +187,21 @@ function renderGPI(gpi) {
 
     destroyChart('gpiRadar');
     const ctx = document.getElementById('gpiRadar').getContext('2d');
+    const radarGrad = ctx.createRadialGradient(ctx.canvas.width/2, ctx.canvas.height/2, 0, ctx.canvas.width/2, ctx.canvas.height/2, ctx.canvas.height/2);
+    radarGrad.addColorStop(0, 'rgba(59,130,246,0.35)');
+    radarGrad.addColorStop(1, 'rgba(59,130,246,0.05)');
     charts.gpiRadar = new Chart(ctx, {
         type: 'radar',
         data: {
             labels: skills.map(s => s.charAt(0).toUpperCase() + s.slice(1)),
             datasets: [{
                 data: values,
-                backgroundColor: 'rgba(59,130,246,0.15)',
+                backgroundColor: radarGrad,
                 borderColor: '#3b82f6',
                 borderWidth: 2,
                 pointBackgroundColor: '#3b82f6',
                 pointRadius: 3,
+                pointHoverRadius: 5,
             }]
         },
         options: {
@@ -151,12 +211,12 @@ function renderGPI(gpi) {
                 r: {
                     beginAtZero: true, max: 100,
                     ticks: { display: false, stepSize: 25 },
-                    grid: { color: '#1e293b' },
-                    pointLabels: { color: '#94a3b8', font: { size: 10 } },
-                    angleLines: { color: '#1e293b' },
+                    grid: { color: '#334155' },
+                    pointLabels: { color: '#cbd5e1', font: { size: 10, family: "'Inter', sans-serif" } },
+                    angleLines: { color: '#334155' },
                 }
             },
-            plugins: { legend: { display: false } }
+            plugins: { legend: { display: false }, tooltip: themedTooltip }
         }
     });
 }
@@ -229,31 +289,88 @@ function renderMatchList(matches) {
     }).join('');
 }
 
+let champStatsData = [];
+let champSortKey = 'games_played';
+let champSortAsc = false;
+
 function renderChampionStats(stats) {
     const el = document.getElementById('championStatsBody');
-    if (!stats) { el.innerHTML = ''; return; }
+    if (!stats) { el.innerHTML = ''; champStatsData = []; return; }
 
-    el.innerHTML = Object.entries(stats)
-        .sort((a, b) => b[1].games_played - a[1].games_played)
-        .map(([champ, d]) => `
-            <tr class="border-t border-gray-800/50 hover:bg-gray-800/30 text-xs">
-                <td class="p-2">
-                    <div class="flex items-center gap-2">
-                        <img src="https://ddragon.leagueoflegends.com/cdn/${ddragonVersion}/img/champion/${champ}.png" alt="${champ}" class="w-6 h-6 rounded" onerror="this.style.display='none'">
-                        <span>${champ}</span>
-                    </div>
-                </td>
-                <td class="p-2">${d.games_played}</td>
-                <td class="p-2 ${d.win_rate >= 55 ? 'text-green-400' : d.win_rate <= 45 ? 'text-red-400' : ''}">${d.win_rate.toFixed(0)}%</td>
-                <td class="p-2 font-mono">${d.kda.toFixed(2)}</td>
-                <td class="p-2 font-mono">${d.avg_kills.toFixed(1)}/${d.avg_deaths.toFixed(1)}/${d.avg_assists.toFixed(1)}</td>
-                <td class="p-2">${Math.round(d.avg_damage).toLocaleString()}</td>
-                <td class="p-2">${Math.round(d.avg_gold).toLocaleString()}</td>
-            </tr>
-        `).join('');
+    champStatsData = Object.entries(stats).map(([champ, d]) => ({ champ, ...d }));
+    champSortKey = 'games_played';
+    champSortAsc = false;
+    renderChampionRows();
 }
 
+function renderChampionRows() {
+    const el = document.getElementById('championStatsBody');
+    const sorted = [...champStatsData].sort((a, b) => {
+        const va = champSortKey === 'champ' ? a.champ.toLowerCase() : a[champSortKey];
+        const vb = champSortKey === 'champ' ? b.champ.toLowerCase() : b[champSortKey];
+        if (va < vb) return champSortAsc ? -1 : 1;
+        if (va > vb) return champSortAsc ? 1 : -1;
+        return 0;
+    });
+
+    el.innerHTML = sorted.map(d => `
+        <tr class="border-t border-gray-800/50 hover:bg-gray-800/30 text-xs">
+            <td class="p-2">
+                <div class="flex items-center gap-2">
+                    <img src="https://ddragon.leagueoflegends.com/cdn/${ddragonVersion}/img/champion/${d.champ}.png" alt="${d.champ}" class="w-6 h-6 rounded" onerror="this.style.display='none'">
+                    <span>${d.champ}</span>
+                </div>
+            </td>
+            <td class="p-2">${d.games_played}</td>
+            <td class="p-2 ${d.win_rate >= 55 ? 'text-green-400' : d.win_rate <= 45 ? 'text-red-400' : ''}">${d.win_rate.toFixed(0)}%</td>
+            <td class="p-2 font-mono">${d.kda.toFixed(2)}</td>
+            <td class="p-2 font-mono">${d.avg_kills.toFixed(1)}/${d.avg_deaths.toFixed(1)}/${d.avg_assists.toFixed(1)}</td>
+            <td class="p-2">${Math.round(d.avg_damage).toLocaleString()}</td>
+            <td class="p-2">${Math.round(d.avg_gold).toLocaleString()}</td>
+        </tr>
+    `).join('');
+
+    // Update sort indicators
+    document.querySelectorAll('#championTable th[data-sort]').forEach(th => {
+        const arrow = th.querySelector('.sort-arrow');
+        if (th.dataset.sort === champSortKey) {
+            arrow.textContent = champSortAsc ? ' \u25B2' : ' \u25BC';
+        } else {
+            arrow.textContent = '';
+        }
+    });
+}
+
+window.sortChampTable = function(key) {
+    if (champSortKey === key) {
+        champSortAsc = !champSortAsc;
+    } else {
+        champSortKey = key;
+        champSortAsc = false;
+    }
+    renderChampionRows();
+};
+
 // ============ CHARTS ============
+function makeGradient(ctx, colorTop, colorBot) {
+    const g = ctx.createLinearGradient(0, 0, 0, ctx.canvas.height);
+    g.addColorStop(0, colorTop);
+    g.addColorStop(1, colorBot);
+    return g;
+}
+
+const themedTooltip = {
+    backgroundColor: 'rgba(15, 23, 42, 0.9)',
+    titleColor: '#e2e8f0',
+    bodyColor: '#94a3b8',
+    borderColor: 'rgba(59, 130, 246, 0.3)',
+    borderWidth: 1,
+    cornerRadius: 8,
+    padding: 10,
+    titleFont: { family: "'Inter', sans-serif", weight: '600' },
+    bodyFont: { family: "'Inter', sans-serif" },
+};
+
 function renderCharts(data) {
     const matches = data.trend_matches || [];
     if (!matches.length) return;
@@ -262,33 +379,42 @@ function renderCharts(data) {
     const chartOpts = {
         responsive: true, maintainAspectRatio: false,
         scales: {
-            x: { grid: { color: '#1e293b' }, ticks: { color: '#64748b', font: { size: 10 } } },
-            y: { grid: { color: '#1e293b' }, ticks: { color: '#64748b', font: { size: 10 } } }
+            x: { grid: { color: '#334155' }, ticks: { color: '#94a3b8', font: { size: 10 } } },
+            y: { grid: { color: '#334155' }, ticks: { color: '#94a3b8', font: { size: 10 } } }
         },
-        plugins: { legend: { labels: { color: '#94a3b8', font: { size: 10 } } } }
+        plugins: {
+            legend: { labels: { color: '#cbd5e1', font: { size: 10 } } },
+            tooltip: themedTooltip,
+        }
     };
 
     // Performance trend (ML scores from match_analyses)
     const mlScores = (data.match_analyses || []).map(m => m.ml_scores?.performance_score || null).filter(s => s != null);
     if (mlScores.length) {
         destroyChart('perfTrendChart');
-        charts.perfTrendChart = new Chart(document.getElementById('perfTrendChart'), {
+        const perfCtx = document.getElementById('perfTrendChart').getContext('2d');
+        const perfGrad = makeGradient(perfCtx, 'rgba(59,130,246,0.3)', 'rgba(59,130,246,0)');
+        charts.perfTrendChart = new Chart(perfCtx, {
             type: 'line', data: {
                 labels: mlScores.map((_, i) => `G${i + 1}`),
-                datasets: [{ label: 'Performance Score', data: mlScores, borderColor: '#3b82f6', backgroundColor: 'rgba(59,130,246,0.1)', fill: true, tension: 0.3, pointRadius: 3 }]
+                datasets: [{ label: 'Performance Score', data: mlScores, borderColor: '#3b82f6', backgroundColor: perfGrad, fill: true, tension: 0.3, pointRadius: 3, pointBackgroundColor: '#3b82f6' }]
             }, options: { ...chartOpts, scales: { ...chartOpts.scales, y: { ...chartOpts.scales.y, min: 0, max: 100 } } }
         });
     }
 
-    // KDA trend
+    // KDA trend with gradient fills
     destroyChart('kdaTrendChart');
-    charts.kdaTrendChart = new Chart(document.getElementById('kdaTrendChart'), {
+    const kdaCtx = document.getElementById('kdaTrendChart').getContext('2d');
+    const killGrad = makeGradient(kdaCtx, 'rgba(34,197,94,0.25)', 'rgba(34,197,94,0)');
+    const deathGrad = makeGradient(kdaCtx, 'rgba(239,68,68,0.25)', 'rgba(239,68,68,0)');
+    const assistGrad = makeGradient(kdaCtx, 'rgba(59,130,246,0.25)', 'rgba(59,130,246,0)');
+    charts.kdaTrendChart = new Chart(kdaCtx, {
         type: 'line', data: {
             labels,
             datasets: [
-                { label: 'Kills', data: matches.map(m => m.kills), borderColor: '#22c55e', tension: 0.3, pointRadius: 2 },
-                { label: 'Deaths', data: matches.map(m => m.deaths), borderColor: '#ef4444', tension: 0.3, pointRadius: 2 },
-                { label: 'Assists', data: matches.map(m => m.assists), borderColor: '#3b82f6', tension: 0.3, pointRadius: 2 },
+                { label: 'Kills', data: matches.map(m => m.kills), borderColor: '#22c55e', backgroundColor: killGrad, fill: true, tension: 0.3, pointRadius: 2, pointBackgroundColor: '#22c55e' },
+                { label: 'Deaths', data: matches.map(m => m.deaths), borderColor: '#ef4444', backgroundColor: deathGrad, fill: true, tension: 0.3, pointRadius: 2, pointBackgroundColor: '#ef4444' },
+                { label: 'Assists', data: matches.map(m => m.assists), borderColor: '#3b82f6', backgroundColor: assistGrad, fill: true, tension: 0.3, pointRadius: 2, pointBackgroundColor: '#3b82f6' },
             ]
         }, options: chartOpts
     });
@@ -303,8 +429,8 @@ function renderCharts(data) {
         charts.roleChart = new Chart(document.getElementById('roleChart'), {
             type: 'doughnut', data: {
                 labels: Object.keys(roles),
-                datasets: [{ data: Object.values(roles), backgroundColor: ['#3b82f6', '#22c55e', '#f59e0b', '#ef4444', '#8b5cf6'] }]
-            }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right', labels: { color: '#94a3b8', font: { size: 10 } } } } }
+                datasets: [{ data: Object.values(roles), backgroundColor: ['#3b82f6', '#22c55e', '#f59e0b', '#ef4444', '#8b5cf6'], borderColor: 'rgba(15,23,42,0.8)', borderWidth: 2 }]
+            }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right', labels: { color: '#94a3b8', font: { size: 10 } } }, tooltip: themedTooltip } }
         });
     }
 
@@ -323,9 +449,9 @@ function renderCharts(data) {
             type: 'bar', data: {
                 labels: analyses.slice(0, 10).map((_, i) => `G${i + 1}`),
                 datasets: [
-                    { label: 'Physical', data: physArr.slice(0, 10), backgroundColor: '#f59e0b' },
-                    { label: 'Magic', data: magArr.slice(0, 10), backgroundColor: '#3b82f6' },
-                    { label: 'True', data: trueArr.slice(0, 10), backgroundColor: '#e2e8f0' },
+                    { label: 'Physical', data: physArr.slice(0, 10), backgroundColor: 'rgba(245,158,11,0.8)', borderRadius: 2 },
+                    { label: 'Magic', data: magArr.slice(0, 10), backgroundColor: 'rgba(59,130,246,0.8)', borderRadius: 2 },
+                    { label: 'True', data: trueArr.slice(0, 10), backgroundColor: 'rgba(226,232,240,0.8)', borderRadius: 2 },
                 ]
             }, options: { ...chartOpts, scales: { ...chartOpts.scales, x: { ...chartOpts.scales.x, stacked: true }, y: { ...chartOpts.scales.y, stacked: true } } }
         });
@@ -348,6 +474,15 @@ function renderAdvancedStats(stats) {
     renderEfficiency(stats.efficiency);
     renderRoleSpecific(stats.counter_jungle, stats.tank_frontline, stats.support_value);
     renderCrossMatch(stats.cross_match);
+
+    // Refresh icons + staggered fade-in for advanced panels
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+    container.querySelectorAll('.panel').forEach((panel, i) => {
+        panel.classList.remove('fade-in');
+        void panel.offsetWidth;
+        panel.style.animationDelay = `${i * 0.06}s`;
+        panel.classList.add('fade-in');
+    });
 }
 
 function compositeBar(value, max = 100) {
@@ -368,7 +503,7 @@ function sparkline(values, max = 100) {
 function renderLaneDominance(data) {
     if (!data) return;
     document.getElementById('laneDominancePanel').innerHTML = `
-        <h2 class="panel-title">Lane Dominance</h2>
+        <h2 class="panel-title"><i data-lucide="sword" class="inline w-3.5 h-3.5 mr-1.5 opacity-50"></i>Lane Dominance</h2>
         <p class="text-2xl font-bold text-blue-400">${data.average}<span class="text-sm text-gray-500 ml-1">/100</span></p>
         ${compositeBar(data.average)}
         ${sparkline(data.per_match)}
@@ -378,7 +513,7 @@ function renderLaneDominance(data) {
 function renderClutchFactor(data) {
     if (!data) return;
     document.getElementById('clutchFactorPanel').innerHTML = `
-        <h2 class="panel-title">Clutch Factor</h2>
+        <h2 class="panel-title"><i data-lucide="zap" class="inline w-3.5 h-3.5 mr-1.5 opacity-50"></i>Clutch Factor</h2>
         <p class="text-2xl font-bold text-purple-400">${data.average}<span class="text-sm text-gray-500 ml-1">/100</span></p>
         ${compositeBar(data.average)}
         ${sparkline(data.per_match)}
@@ -388,7 +523,7 @@ function renderClutchFactor(data) {
 function renderSkillshot(data) {
     if (!data) return;
     document.getElementById('skillshotPanel').innerHTML = `
-        <h2 class="panel-title">Skillshot Accuracy</h2>
+        <h2 class="panel-title"><i data-lucide="crosshair" class="inline w-3.5 h-3.5 mr-1.5 opacity-50"></i>Skillshot Accuracy</h2>
         <p class="text-2xl font-bold text-cyan-400">${data.average}<span class="text-sm text-gray-500 ml-1">%</span></p>
         ${compositeBar(data.average)}
         <div class="flex justify-between mt-3 text-xs text-gray-500">
@@ -425,7 +560,7 @@ function renderCommunication(data) {
         }).join('');
 
     document.getElementById('communicationPanel').innerHTML = `
-        <h2 class="panel-title">Communication</h2>
+        <h2 class="panel-title"><i data-lucide="message-circle" class="inline w-3.5 h-3.5 mr-1.5 opacity-50"></i>Communication</h2>
         <div class="flex items-center gap-3 mb-3">
             <span class="archetype-badge ${archetypeClass}">${data.archetype}</span>
             <span class="text-xs text-gray-500">${data.pings_per_min} pings/min</span>
@@ -438,7 +573,7 @@ function renderCommunication(data) {
 function renderVisionQuality(data) {
     if (!data) return;
     document.getElementById('visionQualityPanel').innerHTML = `
-        <h2 class="panel-title">Vision Quality</h2>
+        <h2 class="panel-title"><i data-lucide="eye" class="inline w-3.5 h-3.5 mr-1.5 opacity-50"></i>Vision Quality</h2>
         <div class="grid grid-cols-2 gap-3">
             <div class="stat-card">
                 <div class="label">Control Ward Coverage</div>
@@ -470,7 +605,7 @@ function renderEfficiency(data) {
         { label: 'Dmg/Gold Earned', value: data.avg_damage_per_gold_earned },
     ];
     document.getElementById('efficiencyPanel').innerHTML = `
-        <h2 class="panel-title">Efficiency Ratios</h2>
+        <h2 class="panel-title"><i data-lucide="gauge" class="inline w-3.5 h-3.5 mr-1.5 opacity-50"></i>Efficiency Ratios</h2>
         <div class="grid grid-cols-2 md:grid-cols-5 gap-3">
             ${stats.map(s => `<div class="stat-card"><div class="label">${s.label}</div><div class="value text-sm">${s.value}</div></div>`).join('')}
         </div>
@@ -488,7 +623,7 @@ function renderRoleSpecific(jungle, tank, support) {
         anyVisible = true;
         jp.classList.remove('hidden');
         jp.innerHTML = `
-            <h2 class="panel-title">Counter-Jungle</h2>
+            <h2 class="panel-title"><i data-lucide="trees" class="inline w-3.5 h-3.5 mr-1.5 opacity-50"></i>Counter-Jungle</h2>
             <p class="text-xs text-gray-500 mb-2">${jungle.games} jungle game${jungle.games !== 1 ? 's' : ''}</p>
             <div class="mini-stat"><span class="label">Avg Buffs Stolen</span><span class="value">${jungle.avg_buffs_stolen}</span></div>
             <div class="mini-stat"><span class="label">Avg Enemy Camp Kills</span><span class="value">${jungle.avg_enemy_jungle_kills}</span></div>
@@ -502,7 +637,7 @@ function renderRoleSpecific(jungle, tank, support) {
         anyVisible = true;
         tp.classList.remove('hidden');
         tp.innerHTML = `
-            <h2 class="panel-title">Tank / Frontline</h2>
+            <h2 class="panel-title"><i data-lucide="shield" class="inline w-3.5 h-3.5 mr-1.5 opacity-50"></i>Tank / Frontline</h2>
             <p class="text-xs text-gray-500 mb-2">${tank.games} tanky game${tank.games !== 1 ? 's' : ''}</p>
             <div class="mini-stat"><span class="label">Avg Damage Mitigated</span><span class="value">${Math.round(tank.avg_damage_mitigated).toLocaleString()}</span></div>
             ${tank.per_match.length ? `
@@ -517,7 +652,7 @@ function renderRoleSpecific(jungle, tank, support) {
         anyVisible = true;
         sp.classList.remove('hidden');
         sp.innerHTML = `
-            <h2 class="panel-title">Support Value</h2>
+            <h2 class="panel-title"><i data-lucide="heart-pulse" class="inline w-3.5 h-3.5 mr-1.5 opacity-50"></i>Support Value</h2>
             <p class="text-xs text-gray-500 mb-2">${support.games} support game${support.games !== 1 ? 's' : ''}</p>
             <div class="mini-stat"><span class="label">Avg Shielding</span><span class="value">${Math.round(support.avg_shields).toLocaleString()}</span></div>
             <div class="mini-stat"><span class="label">Avg Healing</span><span class="value">${Math.round(support.avg_heals).toLocaleString()}</span></div>
@@ -548,7 +683,7 @@ function renderCrossMatch(data) {
         else tiltLabel = '<span class="highlight-pill">Mentally Stable</span>';
     }
     document.getElementById('tiltDetectionPanel').innerHTML = `
-        <h2 class="panel-title">Tilt Detection</h2>
+        <h2 class="panel-title"><i data-lucide="brain" class="inline w-3.5 h-3.5 mr-1.5 opacity-50"></i>Tilt Detection</h2>
         <div class="mb-2">${tiltLabel}</div>
         <div class="mini-stat"><span class="label">WR After Win</span><span class="value ${typeof wrAfterWin === 'number' && wrAfterWin >= 50 ? 'text-green-400' : ''}">${wrAfterWin}${typeof wrAfterWin === 'number' ? '%' : ''}</span></div>
         <div class="mini-stat"><span class="label">WR After Loss</span><span class="value ${typeof wrAfterLoss === 'number' && wrAfterLoss >= 50 ? 'text-green-400' : 'text-red-400'}">${wrAfterLoss}${typeof wrAfterLoss === 'number' ? '%' : ''}</span></div>
@@ -568,13 +703,13 @@ function renderCrossMatch(data) {
         </div>`;
     }).join('');
     document.getElementById('timeOfDayPanel').innerHTML = `
-        <h2 class="panel-title">Time of Day (UTC)</h2>
+        <h2 class="panel-title"><i data-lucide="clock" class="inline w-3.5 h-3.5 mr-1.5 opacity-50"></i>Time of Day (UTC)</h2>
         <div class="flex items-end gap-1 mt-2" style="min-height:70px">${todBars}</div>
     `;
 
     // Surrender Stats
     document.getElementById('surrenderPanel').innerHTML = `
-        <h2 class="panel-title">Surrender Stats</h2>
+        <h2 class="panel-title"><i data-lucide="flag" class="inline w-3.5 h-3.5 mr-1.5 opacity-50"></i>Surrender Stats</h2>
         <div class="mini-stat"><span class="label">Surrenders</span><span class="value">${surr.total_surrenders} / ${surr.total_games}</span></div>
         <div class="mini-stat"><span class="label">Early FFs</span><span class="value">${surr.early_surrenders}</span></div>
         <div class="mini-stat"><span class="label">Surrender Rate</span><span class="value">${surr.surrender_rate}%</span></div>
@@ -665,16 +800,17 @@ function renderComparison(u1, u2) {
     }).join('');
 
     el.innerHTML = `
-        <div class="panel">
+        <div class="panel fade-in">
             <div class="flex justify-between mb-4">
                 <span class="text-blue-400 font-medium">${u1.summoner_name}</span>
                 <span class="text-gray-500 text-sm">VS</span>
                 <span class="text-red-400 font-medium">${u2.summoner_name}</span>
             </div>
             <div class="space-y-2 mb-6">${barsHtml}</div>
-            <h3 class="panel-title mt-4">GPI Skills</h3>
+            <h3 class="panel-title mt-4"><i data-lucide="radar" class="inline w-3.5 h-3.5 mr-1.5 opacity-50"></i>GPI Skills</h3>
             <div class="space-y-2">${gpiHtml}</div>
         </div>`;
+    if (typeof lucide !== 'undefined') lucide.createIcons();
 }
 
 // ============ LIVE GAME ============
@@ -724,6 +860,7 @@ function renderLiveGame(data) {
                 <div class="space-y-2">${renderTeam(team2, 'red')}</div>
             </div>
         </div>`;
+    if (typeof lucide !== 'undefined') lucide.createIcons();
 }
 
 // ============ UTILITIES ============
