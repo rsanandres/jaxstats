@@ -522,6 +522,26 @@ function renderClutchFactor(data) {
 
 function renderSkillshot(data) {
     if (!data) return;
+
+    // Per-champion breakdown
+    const perChamp = data.per_champion || {};
+    const champRows = Object.entries(perChamp)
+        .sort((a, b) => b[1].games - a[1].games)
+        .map(([champ, d]) => {
+            const pct = Math.min(d.average, 100);
+            const color = pct >= 25 ? '#22c55e' : pct >= 15 ? '#f59e0b' : '#ef4444';
+            return `
+            <div class="flex items-center gap-2 py-1.5 border-b border-gray-800/50 last:border-0">
+                <img src="https://ddragon.leagueoflegends.com/cdn/${ddragonVersion}/img/champion/${champ}.png" alt="${champ}" class="w-5 h-5 rounded" onerror="this.style.display='none'">
+                <span class="text-xs flex-1">${champ}</span>
+                <span class="text-xs text-gray-400">${d.games}g</span>
+                <div class="w-16 h-1.5 bg-gray-800 rounded overflow-hidden">
+                    <div class="h-full rounded" style="width:${pct}%;background:${color}"></div>
+                </div>
+                <span class="text-xs font-semibold w-10 text-right" style="color:${color}">${d.average}%</span>
+            </div>`;
+        }).join('');
+
     document.getElementById('skillshotPanel').innerHTML = `
         <h2 class="panel-title"><i data-lucide="crosshair" class="inline w-3.5 h-3.5 mr-1.5 opacity-50"></i>Skillshot Accuracy</h2>
         <p class="text-2xl font-bold text-cyan-400">${data.average}<span class="text-sm text-gray-500 ml-1">%</span></p>
@@ -530,6 +550,7 @@ function renderSkillshot(data) {
             <span>${data.total_hits.toLocaleString()} hits</span>
             <span>${data.total_uses.toLocaleString()} casts</span>
         </div>
+        ${champRows ? `<div class="mt-4 pt-3 border-t border-gray-800"><div class="text-xs text-gray-400 mb-2 uppercase tracking-wider font-medium">By Champion</div>${champRows}</div>` : ''}
     `;
 }
 
@@ -897,3 +918,259 @@ window.toggleDrop = function(i) {
     const el = document.getElementById(`drop-${i}`);
     if (el) el.classList.toggle('hidden');
 };
+
+// ============ WATCHLIST ============
+let watchlistLoaded = false;
+
+async function loadWatchlist() {
+    try {
+        const resp = await fetch('/api/watchlist');
+        if (!resp.ok) throw new Error('Failed to load watchlist');
+        const data = await resp.json();
+        renderWatchlistCards(data.summoners);
+        applyScheduleToForm(data.schedule);
+    } catch (err) {
+        console.error('Watchlist load error:', err);
+    }
+}
+
+function applyScheduleToForm(schedule) {
+    if (!schedule) return;
+    document.getElementById('wlSchedEnabled').checked = schedule.enabled;
+    document.getElementById('wlSchedTime').value = schedule.time || '06:00';
+    const tzSel = document.getElementById('wlSchedTz');
+    for (const opt of tzSel.options) {
+        if (opt.value === schedule.timezone) { opt.selected = true; break; }
+    }
+}
+
+function renderWatchlistCards(summoners) {
+    const container = document.getElementById('watchlistCards');
+    const empty = document.getElementById('watchlistEmpty');
+
+    if (!summoners || !summoners.length) {
+        container.innerHTML = '';
+        container.appendChild(empty);
+        empty.classList.remove('hidden');
+        if (typeof lucide !== 'undefined') lucide.createIcons();
+        return;
+    }
+
+    const freshMs = 24 * 60 * 60 * 1000; // 24h
+    const staleMs = 48 * 60 * 60 * 1000; // 48h
+
+    container.innerHTML = summoners.map(s => {
+        const lat = s.latest || {};
+        const lastRefreshed = lat.last_refreshed;
+        let statusClass = 'wl-status-none';
+        let statusTitle = 'Never refreshed';
+        if (lastRefreshed) {
+            const age = Date.now() - new Date(lastRefreshed).getTime();
+            if (age < freshMs) { statusClass = 'wl-status-fresh'; statusTitle = 'Refreshed recently'; }
+            else if (age < staleMs) { statusClass = 'wl-status-stale'; statusTitle = 'Stale (>24h)'; }
+            else { statusClass = 'wl-status-old'; statusTitle = 'Old (>48h)'; }
+        }
+
+        const gpi = lat.gpi_overall != null ? lat.gpi_overall.toFixed(0) : '--';
+        const wr = lat.win_rate != null ? parseFloat(lat.win_rate).toFixed(1) + '%' : '--';
+        const kda = lat.kda != null ? parseFloat(lat.kda).toFixed(2) : '--';
+        const timeStr = lastRefreshed ? new Date(lastRefreshed).toLocaleString() : 'Never';
+
+        return `
+        <div class="wl-card fade-in" data-name="${s.name}" data-region="${s.region}" data-slug="${s.slug}">
+            <div class="flex items-center justify-between mb-3">
+                <div class="flex items-center gap-2">
+                    <span class="wl-status-dot ${statusClass}" title="${statusTitle}"></span>
+                    <div>
+                        <div class="text-sm font-medium text-gray-100">${s.name}</div>
+                        <div class="text-xs text-gray-500">${s.region.replace('1','').toUpperCase()} &middot; ${s.snapshot_mode}</div>
+                    </div>
+                </div>
+                <div class="flex gap-1">
+                    <button class="btn-secondary wl-btn-sm" onclick="refreshWatchlistSummoner('${s.name}','${s.region}')" title="Refresh">
+                        <i data-lucide="refresh-cw" class="w-3 h-3"></i>
+                    </button>
+                    <button class="btn-secondary wl-btn-sm wl-btn-danger" onclick="removeWatchlistSummoner('${s.name}','${s.region}')" title="Remove">
+                        <i data-lucide="x" class="w-3 h-3"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="grid grid-cols-3 gap-2 text-center">
+                <div class="stat-card">
+                    <div class="label">GPI</div>
+                    <div class="value text-sm text-blue-400">${gpi}</div>
+                </div>
+                <div class="stat-card">
+                    <div class="label">WR</div>
+                    <div class="value text-sm">${wr}</div>
+                </div>
+                <div class="stat-card">
+                    <div class="label">KDA</div>
+                    <div class="value text-sm">${kda}</div>
+                </div>
+            </div>
+            <div class="flex items-center justify-between mt-3">
+                <span class="text-xs text-gray-600">${timeStr}</span>
+                <button class="text-xs text-blue-400 hover:text-blue-300" onclick="showWatchlistHistory('${s.slug}','${s.name}')">History</button>
+            </div>
+        </div>`;
+    }).join('');
+
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+}
+
+window.refreshWatchlistSummoner = async function(name, region) {
+    showToast('Refreshing ' + name + '...', 'success');
+    try {
+        const resp = await fetch('/api/watchlist/refresh', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name, region })
+        });
+        if (!resp.ok) throw new Error('Refresh failed');
+        showToast(name + ' refreshed', 'success');
+        await loadWatchlist();
+    } catch (err) {
+        showToast('Refresh failed: ' + err.message, 'error');
+    }
+};
+
+window.removeWatchlistSummoner = async function(name, region) {
+    try {
+        const resp = await fetch('/api/watchlist/remove', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name, region })
+        });
+        if (!resp.ok) throw new Error('Remove failed');
+        showToast(name + ' removed', 'success');
+        await loadWatchlist();
+    } catch (err) {
+        showToast('Remove failed: ' + err.message, 'error');
+    }
+};
+
+window.showWatchlistHistory = async function(slug, name) {
+    const panel = document.getElementById('watchlistHistory');
+    const content = document.getElementById('wlHistoryContent');
+    document.getElementById('wlHistoryName').textContent = name;
+    panel.classList.remove('hidden');
+    content.innerHTML = '<p class="text-gray-500 text-sm">Loading...</p>';
+
+    try {
+        const resp = await fetch(`/api/watchlist/history/${encodeURIComponent(slug)}`);
+        if (!resp.ok) throw new Error('Failed to load history');
+        const data = await resp.json();
+        const history = data.history || [];
+
+        if (!history.length) {
+            content.innerHTML = '<p class="text-gray-500 text-sm">No snapshots yet.</p>';
+            return;
+        }
+
+        content.innerHTML = `
+            <table class="w-full text-sm">
+                <thead>
+                    <tr class="text-left text-xs text-gray-400 uppercase tracking-wider">
+                        <th class="p-2">Date</th>
+                        <th class="p-2">GPI</th>
+                        <th class="p-2">Win Rate</th>
+                        <th class="p-2">KDA</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${history.map(h => `
+                        <tr class="border-t border-gray-800/50 hover:bg-gray-800/30">
+                            <td class="p-2 text-xs">${h.date}</td>
+                            <td class="p-2 text-blue-400 font-mono">${h.gpi_overall != null ? h.gpi_overall.toFixed(0) : '--'}</td>
+                            <td class="p-2 font-mono">${h.win_rate != null ? parseFloat(h.win_rate).toFixed(1) + '%' : '--'}</td>
+                            <td class="p-2 font-mono">${h.kda != null ? parseFloat(h.kda).toFixed(2) : '--'}</td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>`;
+    } catch (err) {
+        content.innerHTML = `<p class="text-red-400 text-sm">${err.message}</p>`;
+    }
+};
+
+// Wire up watchlist forms after DOM ready
+document.addEventListener('DOMContentLoaded', () => {
+    // Load watchlist when tab is clicked
+    document.getElementById('tabWatchlist')?.addEventListener('click', () => {
+        if (!watchlistLoaded) {
+            watchlistLoaded = true;
+            loadWatchlist();
+        }
+    });
+
+    // Add summoner form
+    document.getElementById('watchlistAddForm')?.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const name = document.getElementById('wlSummonerName').value.trim();
+        const region = document.getElementById('wlRegion').value;
+        const matchCount = parseInt(document.getElementById('wlMatchCount').value);
+        const snapshotMode = document.getElementById('wlSnapshotMode').value;
+
+        if (!name) return;
+
+        try {
+            const resp = await fetch('/api/watchlist/add', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name, region, match_count: matchCount, snapshot_mode: snapshotMode })
+            });
+            if (!resp.ok) {
+                const err = await resp.json().catch(() => ({}));
+                throw new Error(err.detail || 'Failed to add');
+            }
+            document.getElementById('wlSummonerName').value = '';
+            showToast(name + ' added — refreshing in background', 'success');
+            await loadWatchlist();
+        } catch (err) {
+            showToast(err.message, 'error');
+        }
+    });
+
+    // Schedule form
+    document.getElementById('watchlistScheduleForm')?.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const enabled = document.getElementById('wlSchedEnabled').checked;
+        const time = document.getElementById('wlSchedTime').value;
+        const tz = document.getElementById('wlSchedTz').value;
+
+        try {
+            const resp = await fetch('/api/watchlist/schedule', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ enabled, time, timezone: tz })
+            });
+            if (!resp.ok) throw new Error('Failed to save schedule');
+            showToast('Schedule saved', 'success');
+        } catch (err) {
+            showToast(err.message, 'error');
+        }
+    });
+
+    // Refresh All button
+    document.getElementById('wlRefreshAllBtn')?.addEventListener('click', async () => {
+        showToast('Refreshing all summoners...', 'success');
+        try {
+            const resp = await fetch('/api/watchlist/refresh', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({})
+            });
+            if (!resp.ok) throw new Error('Refresh failed');
+            showToast('All summoners refreshed', 'success');
+            await loadWatchlist();
+        } catch (err) {
+            showToast('Refresh failed: ' + err.message, 'error');
+        }
+    });
+
+    // History close
+    document.getElementById('wlHistoryClose')?.addEventListener('click', () => {
+        document.getElementById('watchlistHistory').classList.add('hidden');
+    });
+});

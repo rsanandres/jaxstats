@@ -1,3 +1,5 @@
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -6,6 +8,7 @@ from fastapi.requests import Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional, List, Dict
+import asyncio
 import uvicorn
 import traceback
 import sys
@@ -19,12 +22,29 @@ from .ml.features import extract_participant_features, extract_all_participants
 from .ml.gpi import compute_full_gpi
 from .analysis.suggestion_engine import generate_suggestion_async
 from .llm.ollama_client import check_ollama_health
+from .watchlist import WatchlistManager
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="JaxStats - League of Legends Stats Analysis")
+# Initialize components (created before app so lifespan can reference them)
+riot_client = RiotAPIClient()
+ml_models = JaxStatsModels()
+watchlist_manager: Optional[WatchlistManager] = None
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    global watchlist_manager
+    watchlist_manager = WatchlistManager(analyze_fn=run_analysis)
+    logger.info("Watchlist manager started")
+    yield
+    watchlist_manager.shutdown()
+    logger.info("Watchlist manager stopped")
+
+
+app = FastAPI(title="JaxStats - League of Legends Stats Analysis", lifespan=lifespan)
 
 # Configure CORS
 app.add_middleware(
@@ -40,10 +60,6 @@ app.mount("/static", StaticFiles(directory="app/static"), name="static")
 
 # Templates
 templates = Jinja2Templates(directory="app/templates")
-
-# Initialize components
-riot_client = RiotAPIClient()
-ml_models = JaxStatsModels()
 
 # Store debug logs
 debug_logs = []
@@ -116,6 +132,98 @@ def _score_match_for_player(match_data: dict, puuid: str) -> Optional[Dict]:
     return ml_models.score_match(features)
 
 
+async def run_analysis(summoner_name: str, region: str = "na1", match_count: int = 5, use_cache: bool = True) -> dict:
+    """Shared analysis pipeline used by API endpoints and watchlist refreshes."""
+    if match_count < 1 or match_count > 20:
+        raise ValueError("Match count must be between 1 and 20")
+    if '#' not in summoner_name:
+        raise ValueError("Summoner name must be in the format 'GameName#TAG'")
+
+    game_name, tag_line = summoner_name.split('#')
+    account = await riot_client.get_account_by_riot_id(game_name, tag_line, region)
+    puuid = account['puuid']
+    summoner = await riot_client.get_summoner_by_puuid(puuid, region)
+
+    match_ids = await riot_client.get_match_history(puuid, region, count=match_count)
+
+    cached_matches = []
+    new_matches = []
+    for match_id in match_ids:
+        cached_data = riot_client._load_match_data(match_id)
+        if cached_data and use_cache:
+            cached_matches.append(cached_data)
+        else:
+            match_data = await riot_client.get_match_details(match_id, region)
+            if match_data:
+                new_matches.append(match_data)
+
+    matches_data = cached_matches + new_matches
+
+    if not matches_data:
+        return {
+            "summoner_name": summoner.get("name", "Unknown"),
+            "summoner_level": summoner.get("summonerLevel", 0),
+            "profile_icon_id": summoner.get("profileIconId", 0),
+            "overall_stats": {},
+            "match_analyses": [],
+            "champion_stats": {},
+            "gpi": {},
+            "trends": {},
+            "match_count": {
+                "requested": match_count,
+                "retrieved": len(match_ids),
+                "analyzed": 0, "cached": 0, "new": 0,
+            },
+        }
+
+    stats_analyzer = StatsAnalyzer()
+    stats_analyzer.puuid = puuid
+    for match in matches_data:
+        stats_analyzer.add_match(match)
+
+    overall_stats = stats_analyzer.get_player_stats()
+    match_analyses = [stats_analyzer.get_match_details(m.get('metadata', {}).get('matchId', '')) for m in matches_data]
+    match_analyses = [m for m in match_analyses if m]
+    champion_stats = stats_analyzer.get_champion_stats()
+    trend_data = stats_analyzer.get_trend_data()
+    advanced_stats = stats_analyzer.get_advanced_stats()
+
+    player_features_list = []
+    for i, match_data in enumerate(matches_data):
+        ml_result = _score_match_for_player(match_data, puuid)
+        if ml_result and i < len(match_analyses):
+            match_analyses[i]["ml_scores"] = ml_result
+        participant = _find_player_participant(match_data, puuid)
+        if participant:
+            duration = match_data.get("info", {}).get("gameDuration", 0)
+            feats = extract_participant_features(participant, duration)
+            feats["champion_name"] = participant.get("championName", "")
+            feats["position"] = participant.get("teamPosition", "")
+            player_features_list.append(feats)
+
+    gpi = compute_full_gpi(player_features_list)
+
+    return {
+        "summoner_name": summoner.get("name", "Unknown"),
+        "summoner_level": summoner.get("summonerLevel", 0),
+        "profile_icon_id": summoner.get("profileIconId", 0),
+        "overall_stats": overall_stats,
+        "match_analyses": match_analyses,
+        "champion_stats": champion_stats,
+        "gpi": gpi,
+        "advanced_stats": advanced_stats,
+        "trends": trend_data.get("trends", {}),
+        "trend_matches": trend_data.get("matches", []),
+        "match_count": {
+            "requested": match_count,
+            "retrieved": len(match_ids),
+            "analyzed": len(match_analyses),
+            "cached": len(cached_matches),
+            "new": len(new_matches),
+        },
+    }
+
+
 @app.get("/", response_class=HTMLResponse)
 async def home(request: Request):
     """Render the home page."""
@@ -145,103 +253,7 @@ async def analyze_summoner_post(request: SummonerRequest):
 async def analyze_summoner(summoner_name: str, region: str = "na1", match_count: int = 5, use_cache: bool = True):
     """Analyze a summoner's match history and provide insights."""
     try:
-        if match_count < 1 or match_count > 20:
-            raise ValueError("Match count must be between 1 and 20")
-
-        if '#' not in summoner_name:
-            raise ValueError("Summoner name must be in the format 'GameName#TAG'")
-
-        game_name, tag_line = summoner_name.split('#')
-
-        account = await riot_client.get_account_by_riot_id(game_name, tag_line, region)
-        puuid = account['puuid']
-        summoner = await riot_client.get_summoner_by_puuid(puuid, region)
-
-        match_ids = await riot_client.get_match_history(puuid, region, count=match_count)
-
-        matches_data = []
-        cached_matches = []
-        new_matches = []
-
-        for match_id in match_ids:
-            cached_data = riot_client._load_match_data(match_id)
-            if cached_data and use_cache:
-                cached_matches.append(cached_data)
-            else:
-                match_data = await riot_client.get_match_details(match_id, region)
-                if match_data:
-                    new_matches.append(match_data)
-
-        matches_data = cached_matches + new_matches
-
-        if not matches_data:
-            return {
-                "summoner_name": summoner.get("name", "Unknown"),
-                "summoner_level": summoner.get("summonerLevel", 0),
-                "profile_icon_id": summoner.get("profileIconId", 0),
-                "overall_stats": {},
-                "match_analyses": [],
-                "champion_stats": {},
-                "gpi": {},
-                "trends": {},
-                "match_count": {
-                    "requested": match_count,
-                    "retrieved": len(match_ids),
-                    "analyzed": 0, "cached": 0, "new": 0
-                }
-            }
-
-        # Stats analysis
-        stats_analyzer = StatsAnalyzer()
-        stats_analyzer.puuid = puuid
-        for match in matches_data:
-            stats_analyzer.add_match(match)
-
-        overall_stats = stats_analyzer.get_player_stats()
-        match_analyses = [stats_analyzer.get_match_details(m.get('metadata', {}).get('matchId', '')) for m in matches_data]
-        match_analyses = [m for m in match_analyses if m]
-        champion_stats = stats_analyzer.get_champion_stats()
-        trend_data = stats_analyzer.get_trend_data()
-        advanced_stats = stats_analyzer.get_advanced_stats()
-
-        # ML scoring per match
-        player_features_list = []
-        for i, match_data in enumerate(matches_data):
-            ml_result = _score_match_for_player(match_data, puuid)
-            if ml_result and i < len(match_analyses):
-                match_analyses[i]["ml_scores"] = ml_result
-
-            # Collect features for GPI
-            participant = _find_player_participant(match_data, puuid)
-            if participant:
-                duration = match_data.get("info", {}).get("gameDuration", 0)
-                feats = extract_participant_features(participant, duration)
-                feats["champion_name"] = participant.get("championName", "")
-                feats["position"] = participant.get("teamPosition", "")
-                player_features_list.append(feats)
-
-        # Full GPI across all matches
-        gpi = compute_full_gpi(player_features_list)
-
-        return {
-            "summoner_name": summoner.get("name", "Unknown"),
-            "summoner_level": summoner.get("summonerLevel", 0),
-            "profile_icon_id": summoner.get("profileIconId", 0),
-            "overall_stats": overall_stats,
-            "match_analyses": match_analyses,
-            "champion_stats": champion_stats,
-            "gpi": gpi,
-            "advanced_stats": advanced_stats,
-            "trends": trend_data.get("trends", {}),
-            "trend_matches": trend_data.get("matches", []),
-            "match_count": {
-                "requested": match_count,
-                "retrieved": len(match_ids),
-                "analyzed": len(match_analyses),
-                "cached": len(cached_matches),
-                "new": len(new_matches)
-            }
-        }
+        return await run_analysis(summoner_name, region, match_count, use_cache)
     except Exception as e:
         error_msg = f"Error analyzing summoner: {str(e)}"
         log_debug("ERROR", error_msg, sys.exc_info())
@@ -437,16 +449,78 @@ async def health_check():
         "ml_models": ml_models.status,
     }
 
-@app.get("/health")
-async def health_check():
-    """Service health check."""
-    ollama_ok = await check_ollama_health()
-    return {
-        "status": "ok",
-        "riot_api_key": bool(riot_client.api_key),
-        "ollama": "connected" if ollama_ok else "unavailable",
-        "ml_models": ml_models.status,
-    }
+
+# ============ WATCHLIST ENDPOINTS ============
+
+class WatchlistAddRequest(BaseModel):
+    name: str
+    region: str = "na1"
+    match_count: int = 20
+    snapshot_mode: str = "daily"
+
+class WatchlistRemoveRequest(BaseModel):
+    name: str
+    region: str = "na1"
+
+class WatchlistRefreshRequest(BaseModel):
+    name: Optional[str] = None
+    region: Optional[str] = None
+
+class WatchlistScheduleRequest(BaseModel):
+    enabled: bool
+    time: str = "06:00"
+    timezone: str = "America/New_York"
+
+
+@app.get("/api/watchlist")
+async def get_watchlist():
+    """Return watchlist config + all summoners with latest snapshot summary."""
+    return watchlist_manager.get_watchlist()
+
+
+@app.post("/api/watchlist/add")
+async def watchlist_add(req: WatchlistAddRequest):
+    """Add a summoner to the watchlist."""
+    result = watchlist_manager.add_summoner(req.name, req.region, req.match_count, req.snapshot_mode)
+    if isinstance(result, dict) and "error" in result:
+        raise HTTPException(status_code=409, detail=result["error"])
+    # Trigger initial refresh in background
+    asyncio.ensure_future(watchlist_manager.refresh_summoner(req.name, req.region))
+    return result
+
+
+@app.post("/api/watchlist/remove")
+async def watchlist_remove(req: WatchlistRemoveRequest):
+    """Remove a summoner from the watchlist."""
+    removed = watchlist_manager.remove_summoner(req.name, req.region)
+    if not removed:
+        raise HTTPException(status_code=404, detail="Summoner not found on watchlist")
+    return {"status": "removed"}
+
+
+@app.post("/api/watchlist/refresh")
+async def watchlist_refresh(req: WatchlistRefreshRequest):
+    """Manually trigger refresh for one or all summoners."""
+    if req.name:
+        result = await watchlist_manager.refresh_summoner(req.name, req.region or "na1")
+        return result
+    results = await watchlist_manager.refresh_all()
+    return {"results": results}
+
+
+@app.post("/api/watchlist/schedule")
+async def watchlist_schedule(req: WatchlistScheduleRequest):
+    """Update schedule settings."""
+    watchlist_manager.update_schedule(req.enabled, req.time, req.timezone)
+    return {"status": "updated", "schedule": watchlist_manager._data["schedule"]}
+
+
+@app.get("/api/watchlist/history/{summoner_slug}")
+async def watchlist_history(summoner_slug: str):
+    """Return snapshot history for a summoner."""
+    history = watchlist_manager.get_history(summoner_slug)
+    return {"slug": summoner_slug, "history": history}
+
 
 if __name__ == "__main__":
     uvicorn.run("app.main:app", host="0.0.0.0", port=8000, reload=True)

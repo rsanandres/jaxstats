@@ -25,6 +25,7 @@
                 <button id="tabStats" class="tab-btn active" data-tab="statsTab"><i data-lucide="bar-chart-2" class="inline w-3.5 h-3.5 mr-1"></i>Stats</button>
                 <button id="tabCompare" class="tab-btn" data-tab="compareTab"><i data-lucide="users" class="inline w-3.5 h-3.5 mr-1"></i>Head to Head</button>
                 <button id="tabLive" class="tab-btn" data-tab="liveTab"><i data-lucide="radio" class="inline w-3.5 h-3.5 mr-1"></i>Live Game</button>
+                <button id="tabWatchlist" class="tab-btn" data-tab="watchlistTab"><i data-lucide="list-checks" class="inline w-3.5 h-3.5 mr-1"></i>Watchlist</button>
             </nav>
         </header>
 
@@ -239,6 +240,95 @@
                 <h2 class="panel-title"><i data-lucide="radio" class="inline w-3.5 h-3.5 mr-1.5 opacity-50"></i>Live Game</h2>
                 <p class="text-gray-500 text-sm mb-4">Search for a summoner above to check if they're in game</p>
                 <div id="liveGameContent"></div>
+            </div>
+        </div>
+
+        <!-- ============ WATCHLIST TAB ============ -->
+        <div id="watchlistTab" class="tab-content hidden space-y-6">
+            <!-- Add Summoner Form -->
+            <div class="panel">
+                <h2 class="panel-title"><i data-lucide="user-plus" class="inline w-3.5 h-3.5 mr-1.5 opacity-50"></i>Add Summoner</h2>
+                <form id="watchlistAddForm" class="flex flex-wrap gap-2 items-end">
+                    <div class="flex-1 min-w-0" style="min-width:160px">
+                        <label class="text-xs text-gray-500 mb-1 block">Summoner</label>
+                        <input type="text" id="wlSummonerName" placeholder="Name#TAG" class="form-input w-full" required>
+                    </div>
+                    <div>
+                        <label class="text-xs text-gray-500 mb-1 block">Region</label>
+                        <select id="wlRegion" class="form-select">
+                            <option value="na1">NA</option>
+                            <option value="euw1">EUW</option>
+                            <option value="eun1">EUNE</option>
+                            <option value="kr">KR</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="text-xs text-gray-500 mb-1 block">Matches</label>
+                        <select id="wlMatchCount" class="form-select">
+                            <option value="10">10</option>
+                            <option value="20" selected>20</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="text-xs text-gray-500 mb-1 block">Snapshots</label>
+                        <select id="wlSnapshotMode" class="form-select">
+                            <option value="daily">Daily</option>
+                            <option value="latest">Latest Only</option>
+                        </select>
+                    </div>
+                    <button type="submit" class="btn-primary">Add</button>
+                </form>
+            </div>
+
+            <!-- Summoner Cards Grid -->
+            <div id="watchlistCards" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <div id="watchlistEmpty" class="col-span-full text-center py-12">
+                    <div class="text-4xl mb-3 opacity-40"><i data-lucide="list-checks" class="inline w-10 h-10"></i></div>
+                    <p class="text-gray-500 text-sm">No summoners on your watchlist yet.</p>
+                    <p class="text-gray-600 text-xs mt-1">Add summoners above to start tracking.</p>
+                </div>
+            </div>
+
+            <!-- Schedule Settings -->
+            <div class="panel">
+                <h2 class="panel-title"><i data-lucide="clock" class="inline w-3.5 h-3.5 mr-1.5 opacity-50"></i>Auto-Refresh Schedule</h2>
+                <form id="watchlistScheduleForm" class="flex flex-wrap gap-3 items-end">
+                    <div>
+                        <label class="text-xs text-gray-500 mb-1 block">Enabled</label>
+                        <label class="wl-toggle">
+                            <input type="checkbox" id="wlSchedEnabled">
+                            <span class="wl-toggle-slider"></span>
+                        </label>
+                    </div>
+                    <div>
+                        <label class="text-xs text-gray-500 mb-1 block">Time</label>
+                        <input type="time" id="wlSchedTime" value="06:00" class="form-input">
+                    </div>
+                    <div>
+                        <label class="text-xs text-gray-500 mb-1 block">Timezone</label>
+                        <select id="wlSchedTz" class="form-select">
+                            <option value="America/New_York">Eastern</option>
+                            <option value="America/Chicago">Central</option>
+                            <option value="America/Denver">Mountain</option>
+                            <option value="America/Los_Angeles">Pacific</option>
+                            <option value="Europe/London">London</option>
+                            <option value="Europe/Paris">CET</option>
+                            <option value="Asia/Seoul">KST</option>
+                            <option value="UTC">UTC</option>
+                        </select>
+                    </div>
+                    <button type="submit" class="btn-secondary">Save Schedule</button>
+                    <button type="button" id="wlRefreshAllBtn" class="btn-primary">Refresh All</button>
+                </form>
+            </div>
+
+            <!-- History Panel (shown when a summoner is expanded) -->
+            <div id="watchlistHistory" class="panel hidden">
+                <div class="flex items-center justify-between mb-4">
+                    <h2 class="panel-title mb-0"><i data-lucide="history" class="inline w-3.5 h-3.5 mr-1.5 opacity-50"></i>Snapshot History — <span id="wlHistoryName"></span></h2>
+                    <button type="button" id="wlHistoryClose" class="btn-secondary text-xs">Close</button>
+                </div>
+                <div id="wlHistoryContent"></div>
             </div>
         </div>
 
