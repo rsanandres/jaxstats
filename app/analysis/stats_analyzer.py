@@ -543,6 +543,7 @@ class StatsAnalyzer:
                         "challenges": p.get("challenges", {}),
                         "duration": info.get("gameDuration", 0),
                         "timestamp": info.get("gameStartTimestamp", 0),
+                        "champion": p.get("championName", "Unknown"),
                     })
                     break
 
@@ -553,24 +554,42 @@ class StatsAnalyzer:
 
         # ---- 1. Skillshot Accuracy ----
         skillshot_matches = []
+        skillshot_by_champ = {}
         for e in entries:
             c = e["challenges"]
             hits = c.get("skillshotsHit", 0)
             uses = c.get("abilityUses", 0)
+            champ = e["champion"]
             if uses > 0:
-                skillshot_matches.append({
+                match_data = {
                     "hits": hits,
                     "uses": uses,
                     "accuracy": round(hits / uses * 100, 1),
-                })
+                }
+                skillshot_matches.append(match_data)
+                skillshot_by_champ.setdefault(champ, []).append(match_data)
         skillshot_avg = round(
             np.mean([m["accuracy"] for m in skillshot_matches]), 1
         ) if skillshot_matches else 0
+
+        # Per-champion skillshot breakdown
+        skillshot_per_champion = {}
+        for champ, matches in skillshot_by_champ.items():
+            accuracies = [m["accuracy"] for m in matches]
+            skillshot_per_champion[champ] = {
+                "games": len(matches),
+                "average": round(float(np.mean(accuracies)), 1),
+                "total_hits": sum(m["hits"] for m in matches),
+                "total_uses": sum(m["uses"] for m in matches),
+                "per_game": matches,
+            }
+
         skillshot_accuracy = {
             "per_match": skillshot_matches,
             "average": skillshot_avg,
             "total_hits": sum(m["hits"] for m in skillshot_matches),
             "total_uses": sum(m["uses"] for m in skillshot_matches),
+            "per_champion": skillshot_per_champion,
         }
 
         # ---- 2. Lane Dominance Score (0-100) ----
