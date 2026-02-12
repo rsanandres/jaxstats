@@ -13,6 +13,33 @@ A League of Legends performance analysis dashboard built with FastAPI and XGBoos
 - **AI Coaching** — match improvement suggestions via Ollama (llama3) with rule-based fallback
 - **Dark gaming dashboard** theme inspired by op.gg / Mobalytics
 
+## Screenshots
+
+### Stats Dashboard
+GPI radar, overview cards, win rate, KDA, and trend indicators at a glance.
+
+![Stats Overview](screenshots/stats_overview.png)
+
+### Advanced Stats
+Lane dominance, clutch factor, skillshot accuracy, and per-champion breakdown.
+
+![Advanced Stats](screenshots/advanced_stats.png)
+
+### Performance Charts
+Performance trend, KDA trend, role distribution, damage breakdown, tilt detection, and surrender stats.
+
+![Performance Charts](screenshots/match_history.png)
+
+### Champion Statistics
+Sortable table with win rate, KDA, damage, and gold averages per champion.
+
+![Champion Statistics](screenshots/charts.png)
+
+### Detailed Analytics
+Communication patterns, vision quality, and efficiency ratios.
+
+![Detailed Analytics](screenshots/detailed_stats.png)
+
 ## Setup
 
 ```bash
