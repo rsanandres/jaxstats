@@ -202,6 +202,7 @@ async def analyze_summoner(summoner_name: str, region: str = "na1", match_count:
         match_analyses = [m for m in match_analyses if m]
         champion_stats = stats_analyzer.get_champion_stats()
         trend_data = stats_analyzer.get_trend_data()
+        advanced_stats = stats_analyzer.get_advanced_stats()
 
         # ML scoring per match
         player_features_list = []
@@ -230,6 +231,7 @@ async def analyze_summoner(summoner_name: str, region: str = "na1", match_count:
             "match_analyses": match_analyses,
             "champion_stats": champion_stats,
             "gpi": gpi,
+            "advanced_stats": advanced_stats,
             "trends": trend_data.get("trends", {}),
             "trend_matches": trend_data.get("matches", []),
             "match_count": {

@@ -10,7 +10,7 @@ JaxStats is a Python/FastAPI web application for analyzing League of Legends pla
 
 ### Run the application
 ```bash
-source venv/bin/activate
+source .venv/bin/activate
 uvicorn app.main:app --reload
 # Accessible at http://localhost:8000
 ```

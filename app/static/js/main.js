@@ -87,6 +87,7 @@ function renderDashboard(data) {
     renderTrends(data.trends);
     renderMatchList(data.match_analyses);
     renderChampionStats(data.champion_stats);
+    renderAdvancedStats(data.advanced_stats);
     renderCharts(data);
 }
 
@@ -329,6 +330,256 @@ function renderCharts(data) {
             }, options: { ...chartOpts, scales: { ...chartOpts.scales, x: { ...chartOpts.scales.x, stacked: true }, y: { ...chartOpts.scales.y, stacked: true } } }
         });
     }
+}
+
+// ============ ADVANCED STATS ============
+function renderAdvancedStats(stats) {
+    const container = document.getElementById('advancedStatsContainer');
+    if (!stats || !Object.keys(stats).length) {
+        container.classList.add('hidden');
+        return;
+    }
+    container.classList.remove('hidden');
+    renderLaneDominance(stats.lane_dominance);
+    renderClutchFactor(stats.clutch_factor);
+    renderSkillshot(stats.skillshot_accuracy);
+    renderCommunication(stats.communication);
+    renderVisionQuality(stats.vision_quality);
+    renderEfficiency(stats.efficiency);
+    renderRoleSpecific(stats.counter_jungle, stats.tank_frontline, stats.support_value);
+    renderCrossMatch(stats.cross_match);
+}
+
+function compositeBar(value, max = 100) {
+    const pct = Math.min(value / max * 100, 100);
+    const color = pct >= 60 ? 'linear-gradient(90deg,#3b82f6,#22c55e)' : pct >= 35 ? 'linear-gradient(90deg,#f59e0b,#fbbf24)' : 'linear-gradient(90deg,#ef4444,#f87171)';
+    return `<div class="composite-bar mt-2"><div class="composite-fill" style="width:${pct}%;background:${color}"></div></div>`;
+}
+
+function sparkline(values, max = 100) {
+    if (!values.length) return '';
+    return `<div class="sparkline-bar">${values.map(v => {
+        const h = Math.max(v / max * 40, 2);
+        const bg = v >= 60 ? '#22c55e' : v >= 35 ? '#f59e0b' : '#64748b';
+        return `<div style="height:${h}px;background:${bg}" title="${v}"></div>`;
+    }).join('')}</div>`;
+}
+
+function renderLaneDominance(data) {
+    if (!data) return;
+    document.getElementById('laneDominancePanel').innerHTML = `
+        <h2 class="panel-title">Lane Dominance</h2>
+        <p class="text-2xl font-bold text-blue-400">${data.average}<span class="text-sm text-gray-500 ml-1">/100</span></p>
+        ${compositeBar(data.average)}
+        ${sparkline(data.per_match)}
+    `;
+}
+
+function renderClutchFactor(data) {
+    if (!data) return;
+    document.getElementById('clutchFactorPanel').innerHTML = `
+        <h2 class="panel-title">Clutch Factor</h2>
+        <p class="text-2xl font-bold text-purple-400">${data.average}<span class="text-sm text-gray-500 ml-1">/100</span></p>
+        ${compositeBar(data.average)}
+        ${sparkline(data.per_match)}
+    `;
+}
+
+function renderSkillshot(data) {
+    if (!data) return;
+    document.getElementById('skillshotPanel').innerHTML = `
+        <h2 class="panel-title">Skillshot Accuracy</h2>
+        <p class="text-2xl font-bold text-cyan-400">${data.average}<span class="text-sm text-gray-500 ml-1">%</span></p>
+        ${compositeBar(data.average)}
+        <div class="flex justify-between mt-3 text-xs text-gray-500">
+            <span>${data.total_hits.toLocaleString()} hits</span>
+            <span>${data.total_uses.toLocaleString()} casts</span>
+        </div>
+    `;
+}
+
+function renderCommunication(data) {
+    if (!data) return;
+    const pingLabels = {
+        allInPings: 'All In', assistMePings: 'Assist Me', commandPings: 'Command',
+        dangerPings: 'Danger', enemyMissingPings: 'Enemy Missing', enemyVisionPings: 'Enemy Vision',
+        getBackPings: 'Get Back', holdPings: 'Hold', needVisionPings: 'Need Vision',
+        onMyWayPings: 'On My Way', pushPings: 'Push',
+    };
+    const archetypeClass = {
+        'Shotcaller': 'shotcaller', 'Danger Pinger': 'danger', 'Quiet': 'quiet', 'Communicator': 'communicator'
+    }[data.archetype] || 'quiet';
+
+    const maxPings = Math.max(...Object.values(data.pings), 1);
+    const pingBars = Object.entries(data.pings)
+        .filter(([, v]) => v > 0)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 6)
+        .map(([type, count]) => {
+            const pct = (count / maxPings * 100).toFixed(0);
+            return `<div class="mini-stat">
+                <span class="label">${pingLabels[type] || type}</span>
+                <div class="flex-1 mx-2"><div class="composite-bar"><div class="composite-fill" style="width:${pct}%"></div></div></div>
+                <span class="value">${count}</span>
+            </div>`;
+        }).join('');
+
+    document.getElementById('communicationPanel').innerHTML = `
+        <h2 class="panel-title">Communication</h2>
+        <div class="flex items-center gap-3 mb-3">
+            <span class="archetype-badge ${archetypeClass}">${data.archetype}</span>
+            <span class="text-xs text-gray-500">${data.pings_per_min} pings/min</span>
+            <span class="text-xs text-gray-600">${data.total_pings} total</span>
+        </div>
+        ${pingBars}
+    `;
+}
+
+function renderVisionQuality(data) {
+    if (!data) return;
+    document.getElementById('visionQualityPanel').innerHTML = `
+        <h2 class="panel-title">Vision Quality</h2>
+        <div class="grid grid-cols-2 gap-3">
+            <div class="stat-card">
+                <div class="label">Control Ward Coverage</div>
+                <div class="value text-sm">${data.avg_control_ward_coverage}%</div>
+            </div>
+            <div class="stat-card">
+                <div class="label">Vision Advantage</div>
+                <div class="value text-sm">${data.avg_vision_advantage > 0 ? '+' : ''}${data.avg_vision_advantage}</div>
+            </div>
+            <div class="stat-card">
+                <div class="label">Unseen Recalls</div>
+                <div class="value text-sm">${data.total_unseen_recalls}</div>
+            </div>
+            <div class="stat-card">
+                <div class="label">Early Ward Kills</div>
+                <div class="value text-sm">${data.total_ward_takedowns_early}</div>
+            </div>
+        </div>
+    `;
+}
+
+function renderEfficiency(data) {
+    if (!data) return;
+    const stats = [
+        { label: 'Dmg/Gold Spent', value: data.avg_damage_per_gold_spent },
+        { label: 'Gold Efficiency', value: data.avg_gold_efficiency + '%' },
+        { label: 'Kill Share', value: data.avg_kill_participation_ratio + '%' },
+        { label: 'CC/Death', value: data.avg_cc_per_death + 's' },
+        { label: 'Dmg/Gold Earned', value: data.avg_damage_per_gold_earned },
+    ];
+    document.getElementById('efficiencyPanel').innerHTML = `
+        <h2 class="panel-title">Efficiency Ratios</h2>
+        <div class="grid grid-cols-2 md:grid-cols-5 gap-3">
+            ${stats.map(s => `<div class="stat-card"><div class="label">${s.label}</div><div class="value text-sm">${s.value}</div></div>`).join('')}
+        </div>
+    `;
+}
+
+function renderRoleSpecific(jungle, tank, support) {
+    const row = document.getElementById('roleSpecificRow');
+    const jp = document.getElementById('counterJunglePanel');
+    const tp = document.getElementById('tankFrontlinePanel');
+    const sp = document.getElementById('supportValuePanel');
+    let anyVisible = false;
+
+    if (jungle) {
+        anyVisible = true;
+        jp.classList.remove('hidden');
+        jp.innerHTML = `
+            <h2 class="panel-title">Counter-Jungle</h2>
+            <p class="text-xs text-gray-500 mb-2">${jungle.games} jungle game${jungle.games !== 1 ? 's' : ''}</p>
+            <div class="mini-stat"><span class="label">Avg Buffs Stolen</span><span class="value">${jungle.avg_buffs_stolen}</span></div>
+            <div class="mini-stat"><span class="label">Avg Enemy Camp Kills</span><span class="value">${jungle.avg_enemy_jungle_kills}</span></div>
+            ${jungle.per_match.length ? jungle.per_match.map((m, i) => `
+                <div class="text-xs text-gray-600 mt-1">G${i+1}: ${m.buffs_stolen} stolen, ${m.enemy_jungle_kills} camps, ${m.scuttle_kills} crabs</div>
+            `).slice(0, 3).join('') : ''}
+        `;
+    } else { jp.classList.add('hidden'); }
+
+    if (tank) {
+        anyVisible = true;
+        tp.classList.remove('hidden');
+        tp.innerHTML = `
+            <h2 class="panel-title">Tank / Frontline</h2>
+            <p class="text-xs text-gray-500 mb-2">${tank.games} tanky game${tank.games !== 1 ? 's' : ''}</p>
+            <div class="mini-stat"><span class="label">Avg Damage Mitigated</span><span class="value">${Math.round(tank.avg_damage_mitigated).toLocaleString()}</span></div>
+            ${tank.per_match.length ? `
+                <div class="mini-stat"><span class="label">Survived Full Team Dmg</span><span class="value">${tank.per_match.reduce((a,m) => a + m.killed_champ_full_team_survived, 0)}</span></div>
+                <div class="mini-stat"><span class="label">Survived 3+ CC</span><span class="value">${tank.per_match.reduce((a,m) => a + m.survived_three_immobilizes, 0)}</span></div>
+                <div class="mini-stat"><span class="label">Took Large Dmg & Lived</span><span class="value">${tank.per_match.reduce((a,m) => a + m.took_large_damage_survived, 0)}</span></div>
+            ` : ''}
+        `;
+    } else { tp.classList.add('hidden'); }
+
+    if (support) {
+        anyVisible = true;
+        sp.classList.remove('hidden');
+        sp.innerHTML = `
+            <h2 class="panel-title">Support Value</h2>
+            <p class="text-xs text-gray-500 mb-2">${support.games} support game${support.games !== 1 ? 's' : ''}</p>
+            <div class="mini-stat"><span class="label">Avg Shielding</span><span class="value">${Math.round(support.avg_shields).toLocaleString()}</span></div>
+            <div class="mini-stat"><span class="label">Avg Healing</span><span class="value">${Math.round(support.avg_heals).toLocaleString()}</span></div>
+            ${support.per_match.length ? `
+                <div class="mini-stat"><span class="label">Ally Saves</span><span class="value">${support.per_match.reduce((a,m) => a + m.save_ally, 0)}</span></div>
+                <div class="mini-stat"><span class="label">Quest On Time</span><span class="value">${support.per_match.filter(m => m.quest_completed_on_time).length}/${support.games}</span></div>
+            ` : ''}
+        `;
+    } else { sp.classList.add('hidden'); }
+
+    row.classList.toggle('hidden', !anyVisible);
+}
+
+function renderCrossMatch(data) {
+    if (!data) return;
+    const tilt = data.tilt_detection || {};
+    const tod = data.time_of_day || {};
+    const surr = data.surrender_stats || {};
+
+    // Tilt Detection
+    const wrAfterWin = tilt.wr_after_win != null ? tilt.wr_after_win : '--';
+    const wrAfterLoss = tilt.wr_after_loss != null ? tilt.wr_after_loss : '--';
+    let tiltLabel = '';
+    if (tilt.wr_after_win != null && tilt.wr_after_loss != null) {
+        const diff = tilt.wr_after_win - tilt.wr_after_loss;
+        if (diff > 15) tiltLabel = '<span class="highlight-pill" style="background:#064e3b;color:#6ee7b7">Momentum Player</span>';
+        else if (diff < -15) tiltLabel = '<span class="highlight-pill" style="background:#7f1d1d;color:#fca5a5">Tilt Prone</span>';
+        else tiltLabel = '<span class="highlight-pill">Mentally Stable</span>';
+    }
+    document.getElementById('tiltDetectionPanel').innerHTML = `
+        <h2 class="panel-title">Tilt Detection</h2>
+        <div class="mb-2">${tiltLabel}</div>
+        <div class="mini-stat"><span class="label">WR After Win</span><span class="value ${typeof wrAfterWin === 'number' && wrAfterWin >= 50 ? 'text-green-400' : ''}">${wrAfterWin}${typeof wrAfterWin === 'number' ? '%' : ''}</span></div>
+        <div class="mini-stat"><span class="label">WR After Loss</span><span class="value ${typeof wrAfterLoss === 'number' && wrAfterLoss >= 50 ? 'text-green-400' : 'text-red-400'}">${wrAfterLoss}${typeof wrAfterLoss === 'number' ? '%' : ''}</span></div>
+        <div class="text-xs text-gray-600 mt-2">${tilt.games_after_win || 0} games after wins, ${tilt.games_after_loss || 0} after losses</div>
+    `;
+
+    // Time of Day
+    const todEntries = Object.entries(tod);
+    const maxGames = Math.max(...todEntries.map(([,d]) => d.games), 1);
+    const todBars = todEntries.map(([bucket, d]) => {
+        const h = Math.max(d.games / maxGames * 50, 4);
+        const bg = d.win_rate >= 55 ? '#22c55e' : d.win_rate <= 45 ? '#ef4444' : '#3b82f6';
+        return `<div class="text-center flex-1">
+            <div class="mx-auto rounded-t-sm" style="height:${h}px;width:80%;background:${bg}" title="${d.win_rate}% WR"></div>
+            <div class="text-xs text-gray-600 mt-1">${bucket}</div>
+            <div class="text-xs text-gray-500">${d.games}g ${d.win_rate}%</div>
+        </div>`;
+    }).join('');
+    document.getElementById('timeOfDayPanel').innerHTML = `
+        <h2 class="panel-title">Time of Day (UTC)</h2>
+        <div class="flex items-end gap-1 mt-2" style="min-height:70px">${todBars}</div>
+    `;
+
+    // Surrender Stats
+    document.getElementById('surrenderPanel').innerHTML = `
+        <h2 class="panel-title">Surrender Stats</h2>
+        <div class="mini-stat"><span class="label">Surrenders</span><span class="value">${surr.total_surrenders} / ${surr.total_games}</span></div>
+        <div class="mini-stat"><span class="label">Early FFs</span><span class="value">${surr.early_surrenders}</span></div>
+        <div class="mini-stat"><span class="label">Surrender Rate</span><span class="value">${surr.surrender_rate}%</span></div>
+        ${compositeBar(surr.surrender_rate)}
+    `;
 }
 
 // ============ COMPARISON ============

@@ -527,3 +527,306 @@ class StatsAnalyzer:
         trends["streak"] = {"type": streak_type or "none", "count": current_streak}
 
         return {"matches": per_match, "trends": trends}
+
+    def get_advanced_stats(self) -> Dict:
+        """Compute 10 categories of advanced stats from raw match data."""
+        if not self.puuid or not self.raw_matches:
+            return {}
+
+        entries = []
+        for match_raw in self.raw_matches:
+            info = match_raw.get("info", {})
+            for p in info.get("participants", []):
+                if p.get("puuid") == self.puuid:
+                    entries.append({
+                        "p": p,
+                        "challenges": p.get("challenges", {}),
+                        "duration": info.get("gameDuration", 0),
+                        "timestamp": info.get("gameStartTimestamp", 0),
+                    })
+                    break
+
+        if not entries:
+            return {}
+
+        n = len(entries)
+
+        # ---- 1. Skillshot Accuracy ----
+        skillshot_matches = []
+        for e in entries:
+            c = e["challenges"]
+            hits = c.get("skillshotsHit", 0)
+            uses = c.get("abilityUses", 0)
+            if uses > 0:
+                skillshot_matches.append({
+                    "hits": hits,
+                    "uses": uses,
+                    "accuracy": round(hits / uses * 100, 1),
+                })
+        skillshot_avg = round(
+            np.mean([m["accuracy"] for m in skillshot_matches]), 1
+        ) if skillshot_matches else 0
+        skillshot_accuracy = {
+            "per_match": skillshot_matches,
+            "average": skillshot_avg,
+            "total_hits": sum(m["hits"] for m in skillshot_matches),
+            "total_uses": sum(m["uses"] for m in skillshot_matches),
+        }
+
+        # ---- 2. Lane Dominance Score (0-100) ----
+        lane_scores = []
+        for e in entries:
+            c = e["challenges"]
+            cs_adv = min(c.get("maxCsAdvantageOnLaneOpponent", 0) / 30, 1) * 20
+            lvl_lead = min(c.get("maxLevelLeadLaneOpponent", 0) / 3, 1) * 15
+            plates = min(c.get("turretPlatesTaken", 0) / 5, 1) * 20
+            early_gold = 10 if c.get("earlyLaningPhaseGoldExpAdvantage", 0) > 0 else 0
+            late_gold = 15 if c.get("laningPhaseGoldExpAdvantage", 0) > 0 else 0
+            solo = min(c.get("soloKills", 0) / 3, 1) * 20
+            score = min(cs_adv + lvl_lead + plates + early_gold + late_gold + solo, 100)
+            lane_scores.append(round(score, 1))
+        lane_dominance = {
+            "per_match": lane_scores,
+            "average": round(np.mean(lane_scores), 1) if lane_scores else 0,
+        }
+
+        # ---- 3. Clutch Score (0-100) ----
+        clutch_scores = []
+        for e in entries:
+            c = e["challenges"]
+            score = 0
+            score += min(c.get("survivedSingleDigitHpCount", 0), 5) * 5
+            score += min(c.get("outnumberedKills", 0), 3) * 8
+            score += c.get("epicMonsterSteals", 0) * 15
+            score += c.get("epicMonsterStolenWithoutSmite", 0) * 5
+            score += c.get("multikillsAfterAggressiveFlash", 0) * 10
+            score += 15 if c.get("perfectGame", 0) else 0
+            score += min(c.get("legendaryCount", 0), 2) * 10
+            score += min(c.get("saveAllyFromDeath", 0), 3) * 5
+            clutch_scores.append(min(round(score, 1), 100))
+        clutch_factor = {
+            "per_match": clutch_scores,
+            "average": round(np.mean(clutch_scores), 1) if clutch_scores else 0,
+        }
+
+        # ---- 4. Communication Profile ----
+        ping_types = [
+            "allInPings", "assistMePings", "commandPings", "dangerPings",
+            "enemyMissingPings", "enemyVisionPings", "getBackPings",
+            "holdPings", "needVisionPings", "onMyWayPings", "pushPings",
+        ]
+        total_pings = {pt: 0 for pt in ping_types}
+        total_minutes = 0
+        for e in entries:
+            p = e["p"]
+            mins = max(e["duration"] / 60, 1)
+            total_minutes += mins
+            for pt in ping_types:
+                total_pings[pt] += p.get(pt, 0)
+        pings_per_min = round(sum(total_pings.values()) / max(total_minutes, 1), 2)
+
+        total_all = sum(total_pings.values())
+        if total_all == 0 or pings_per_min < 0.5:
+            archetype = "Quiet"
+        else:
+            info_pings = total_pings["commandPings"] + total_pings["onMyWayPings"] + total_pings["pushPings"]
+            danger_pings = total_pings["dangerPings"] + total_pings["getBackPings"] + total_pings["enemyMissingPings"]
+            if info_pings > danger_pings and info_pings / max(total_all, 1) > 0.4:
+                archetype = "Shotcaller"
+            elif danger_pings > info_pings and danger_pings / max(total_all, 1) > 0.4:
+                archetype = "Danger Pinger"
+            else:
+                archetype = "Communicator"
+
+        communication = {
+            "pings": total_pings,
+            "pings_per_min": pings_per_min,
+            "archetype": archetype,
+            "total_pings": total_all,
+        }
+
+        # ---- 5. Vision Quality ----
+        vision_entries = []
+        for e in entries:
+            c = e["challenges"]
+            vision_entries.append({
+                "control_ward_coverage": round(c.get("controlWardTimeCoverageInRiverOrEnemyHalf", 0) * 100, 1),
+                "vision_advantage": round(c.get("visionScoreAdvantageLaneOpponent", 0), 1),
+                "unseen_recalls": c.get("unseenRecalls", 0),
+                "two_wards_one_sweeper": c.get("twoWardsOneSweeperCount", 0),
+                "ward_takedowns_before_20": c.get("wardTakedownsBefore20M", 0),
+            })
+        vision_quality = {
+            "per_match": vision_entries,
+            "avg_control_ward_coverage": round(np.mean([v["control_ward_coverage"] for v in vision_entries]), 1) if vision_entries else 0,
+            "avg_vision_advantage": round(np.mean([v["vision_advantage"] for v in vision_entries]), 1) if vision_entries else 0,
+            "total_unseen_recalls": sum(v["unseen_recalls"] for v in vision_entries),
+            "total_ward_takedowns_early": sum(v["ward_takedowns_before_20"] for v in vision_entries),
+        }
+
+        # ---- 6. Counter-Jungle (JUNGLE games only) ----
+        jungle_entries = []
+        for e in entries:
+            p = e["p"]
+            pos = p.get("teamPosition", "") or p.get("individualPosition", "")
+            if pos.upper() == "JUNGLE":
+                c = e["challenges"]
+                jungle_entries.append({
+                    "buffs_stolen": c.get("buffsStolen", 0),
+                    "enemy_jungle_kills": c.get("enemyJungleMonsterKills", 0),
+                    "more_enemy_jungle": c.get("moreEnemyJungleThanOpponent", 0),
+                    "epic_kills_30s": c.get("epicMonsterKillsWithin30SecondsOfSpawn", 0),
+                    "jungle_cs_before_10": c.get("jungleCsBefore10Minutes", 0),
+                    "initial_buff_count": c.get("initialBuffCount", 0),
+                    "initial_crab_count": c.get("initialCrabCount", 0),
+                    "scuttle_kills": c.get("scuttleCrabKills", 0),
+                })
+        counter_jungle = {
+            "games": len(jungle_entries),
+            "per_match": jungle_entries,
+            "avg_buffs_stolen": round(np.mean([j["buffs_stolen"] for j in jungle_entries]), 1) if jungle_entries else 0,
+            "avg_enemy_jungle_kills": round(np.mean([j["enemy_jungle_kills"] for j in jungle_entries]), 1) if jungle_entries else 0,
+        } if jungle_entries else None
+
+        # ---- 7. Tank/Frontline (tanky games: damageSelfMitigated > 15000) ----
+        tank_entries = []
+        for e in entries:
+            p = e["p"]
+            c = e["challenges"]
+            mitigated = p.get("damageSelfMitigated", 0)
+            if mitigated > 15000:
+                tank_entries.append({
+                    "killed_champ_full_team_survived": c.get("killedChampTookFullTeamDamageSurvived", 0),
+                    "took_large_damage_survived": c.get("tookLargeDamageSurvived", 0),
+                    "survived_three_immobilizes": c.get("survivedThreeImmobilizesInFight", 0),
+                    "damage_mitigated": mitigated,
+                })
+        tank_frontline = {
+            "games": len(tank_entries),
+            "per_match": tank_entries,
+            "avg_damage_mitigated": round(np.mean([t["damage_mitigated"] for t in tank_entries]), 0) if tank_entries else 0,
+        } if tank_entries else None
+
+        # ---- 8. Support Value (UTILITY/SUPPORT games only) ----
+        support_entries = []
+        for e in entries:
+            p = e["p"]
+            pos = p.get("teamPosition", "") or p.get("individualPosition", "")
+            if pos.upper() in ("UTILITY", "SUPPORT"):
+                c = e["challenges"]
+                support_entries.append({
+                    "shields_on_teammates": p.get("totalDamageShieldedOnTeammates", 0),
+                    "heals_on_teammates": p.get("totalHealsOnTeammates", 0),
+                    "save_ally": c.get("saveAllyFromDeath", 0),
+                    "effective_healing_shielding": c.get("effectiveHealAndShielding", 0),
+                    "quest_completed_on_time": c.get("completeSupportQuestInTime", 0),
+                })
+        support_value = {
+            "games": len(support_entries),
+            "per_match": support_entries,
+            "avg_shields": round(np.mean([s["shields_on_teammates"] for s in support_entries]), 0) if support_entries else 0,
+            "avg_heals": round(np.mean([s["heals_on_teammates"] for s in support_entries]), 0) if support_entries else 0,
+        } if support_entries else None
+
+        # ---- 9. Efficiency Ratios ----
+        efficiency_entries = []
+        for e in entries:
+            p = e["p"]
+            dmg = p.get("totalDamageDealtToChampions", 0)
+            gold_spent = p.get("goldSpent", 0)
+            gold_earned = p.get("goldEarned", 0)
+            kills = p.get("kills", 0)
+            assists = p.get("assists", 0)
+            deaths = max(p.get("deaths", 0), 1)
+            cc = p.get("timeCCingOthers", 0)
+            efficiency_entries.append({
+                "damage_per_gold_spent": round(dmg / max(gold_spent, 1), 2),
+                "gold_efficiency": round(gold_spent / max(gold_earned, 1) * 100, 1),
+                "kill_participation_ratio": round(kills / max(kills + assists, 1) * 100, 1),
+                "cc_per_death": round(cc / deaths, 1),
+                "damage_per_gold_earned": round(dmg / max(gold_earned, 1), 2),
+            })
+        efficiency = {
+            "per_match": efficiency_entries,
+            "avg_damage_per_gold_spent": round(np.mean([x["damage_per_gold_spent"] for x in efficiency_entries]), 2) if efficiency_entries else 0,
+            "avg_gold_efficiency": round(np.mean([x["gold_efficiency"] for x in efficiency_entries]), 1) if efficiency_entries else 0,
+            "avg_kill_participation_ratio": round(np.mean([x["kill_participation_ratio"] for x in efficiency_entries]), 1) if efficiency_entries else 0,
+            "avg_cc_per_death": round(np.mean([x["cc_per_death"] for x in efficiency_entries]), 1) if efficiency_entries else 0,
+            "avg_damage_per_gold_earned": round(np.mean([x["damage_per_gold_earned"] for x in efficiency_entries]), 2) if efficiency_entries else 0,
+        }
+
+        # ---- 10. Cross-Match Analytics ----
+        sorted_entries = sorted(entries, key=lambda e: e["timestamp"])
+
+        # Tilt detection: win rate after wins vs after losses
+        after_win_results = []
+        after_loss_results = []
+        for i in range(1, len(sorted_entries)):
+            prev_win = sorted_entries[i - 1]["p"].get("win", False)
+            curr_win = sorted_entries[i]["p"].get("win", False)
+            if prev_win:
+                after_win_results.append(curr_win)
+            else:
+                after_loss_results.append(curr_win)
+        wr_after_win = round(sum(after_win_results) / len(after_win_results) * 100, 1) if after_win_results else None
+        wr_after_loss = round(sum(after_loss_results) / len(after_loss_results) * 100, 1) if after_loss_results else None
+
+        # Time of Day: group by 4-hour UTC buckets
+        bucket_labels = ["00-04", "04-08", "08-12", "12-16", "16-20", "20-24"]
+        time_buckets = {label: {"games": 0, "wins": 0} for label in bucket_labels}
+        for e in sorted_entries:
+            ts = e["timestamp"]
+            if ts > 0:
+                hour = datetime.utcfromtimestamp(ts / 1000).hour
+                bucket_idx = hour // 4
+                label = bucket_labels[bucket_idx]
+                time_buckets[label]["games"] += 1
+                if e["p"].get("win", False):
+                    time_buckets[label]["wins"] += 1
+        time_of_day = {}
+        for label, data in time_buckets.items():
+            if data["games"] > 0:
+                time_of_day[label] = {
+                    "games": data["games"],
+                    "wins": data["wins"],
+                    "win_rate": round(data["wins"] / data["games"] * 100, 1),
+                }
+
+        # Surrender stats
+        surrenders = 0
+        early_surrenders = 0
+        for e in entries:
+            p = e["p"]
+            if p.get("gameEndedInSurrender", False):
+                surrenders += 1
+            if p.get("gameEndedInEarlySurrender", False):
+                early_surrenders += 1
+
+        cross_match = {
+            "tilt_detection": {
+                "wr_after_win": wr_after_win,
+                "wr_after_loss": wr_after_loss,
+                "games_after_win": len(after_win_results),
+                "games_after_loss": len(after_loss_results),
+            },
+            "time_of_day": time_of_day,
+            "surrender_stats": {
+                "total_surrenders": surrenders,
+                "early_surrenders": early_surrenders,
+                "total_games": n,
+                "surrender_rate": round(surrenders / n * 100, 1) if n > 0 else 0,
+            },
+        }
+
+        return {
+            "skillshot_accuracy": skillshot_accuracy,
+            "lane_dominance": lane_dominance,
+            "clutch_factor": clutch_factor,
+            "communication": communication,
+            "vision_quality": vision_quality,
+            "counter_jungle": counter_jungle,
+            "tank_frontline": tank_frontline,
+            "support_value": support_value,
+            "efficiency": efficiency,
+            "cross_match": cross_match,
+        }

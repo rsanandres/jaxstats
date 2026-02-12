@@ -16,8 +16,8 @@ A League of Legends performance analysis dashboard built with FastAPI and XGBoos
 ## Setup
 
 ```bash
-python -m venv venv
-source venv/bin/activate
+python -m venv .venv
+source .venv/bin/activate
 pip install -r requirements.txt
 cp .env.example .env   # Add your RIOT_API_KEY
 uvicorn app.main:app --reload

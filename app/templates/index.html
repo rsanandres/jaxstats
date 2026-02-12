@@ -69,15 +69,43 @@
                 </div>
             </div>
 
+            <!-- Advanced Stats -->
+            <div id="advancedStatsContainer" class="hidden space-y-4">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div class="panel" id="laneDominancePanel"></div>
+                    <div class="panel" id="clutchFactorPanel"></div>
+                    <div class="panel" id="skillshotPanel"></div>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div class="panel" id="communicationPanel"></div>
+                    <div class="panel" id="visionQualityPanel"></div>
+                </div>
+                <div class="panel" id="efficiencyPanel"></div>
+                <div id="roleSpecificRow" class="grid grid-cols-1 md:grid-cols-3 gap-4 hidden">
+                    <div class="panel hidden" id="counterJunglePanel"></div>
+                    <div class="panel hidden" id="tankFrontlinePanel"></div>
+                    <div class="panel hidden" id="supportValuePanel"></div>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div class="panel" id="tiltDetectionPanel"></div>
+                    <div class="panel" id="timeOfDayPanel"></div>
+                    <div class="panel" id="surrenderPanel"></div>
+                </div>
+            </div>
+
             <!-- Charts Row -->
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div class="panel">
                     <h2 class="panel-title">Performance Trend</h2>
-                    <canvas id="perfTrendChart" height="180"></canvas>
+                    <div style="position:relative;height:200px">
+                        <canvas id="perfTrendChart"></canvas>
+                    </div>
                 </div>
                 <div class="panel">
                     <h2 class="panel-title">KDA Trend</h2>
-                    <canvas id="kdaTrendChart" height="180"></canvas>
+                    <div style="position:relative;height:200px">
+                        <canvas id="kdaTrendChart"></canvas>
+                    </div>
                 </div>
             </div>
 
@@ -90,7 +118,9 @@
                 </div>
                 <div class="panel">
                     <h2 class="panel-title">Damage Breakdown</h2>
-                    <canvas id="dmgChart" height="180"></canvas>
+                    <div style="position:relative;height:200px">
+                        <canvas id="dmgChart"></canvas>
+                    </div>
                 </div>
             </div>
 
@@ -166,6 +196,6 @@
     <!-- Toast container -->
     <div id="toastContainer" class="fixed bottom-4 right-4 z-50 space-y-2"></div>
 
-    <script src="{{ url_for('static', path='js/main.js') }}"></script>
+    <script src="{{ url_for('static', path='js/main.js') }}?v=2"></script>
 </body>
 </html>
