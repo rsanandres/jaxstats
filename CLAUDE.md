@@ -33,15 +33,18 @@ docker build -t jaxstats:local .
 docker run -p 8000:8000 -e RIOT_API_KEY=your_key jaxstats:local
 ```
 
-### No test suite
-There is no formal test framework configured. No pytest, unittest, or CI/CD pipeline exists.
+### Run tests
+```bash
+python -m pytest tests/ -v
+```
+Tests cover: stats analyzer, GPI scoring, feature extraction, Riot API client, FastAPI endpoints, and input validation.
 
 ## Architecture
 
 ### Request Flow
 1. Frontend (`app/templates/index.html` + `app/static/js/main.js`) sends requests to FastAPI endpoints
 2. `app/main.py` routes requests and orchestrates services:
-   - **RiotAPIClient** (`app/api/riot_client.py`) — async HTTP client for Riot Games API with rate-limit handling (120s backoff on 429) and local JSON file caching in `data/`
+   - **RiotAPIClient** (`app/api/riot_client.py`) — async HTTP client for Riot Games API with rate-limit handling (respects Retry-After header), retries for transient errors, and local JSON file caching in `data/`
    - **StatsAnalyzer** (`app/analysis/stats_analyzer.py`) — parses raw match data into aggregated player/champion/position statistics, computes trends
    - **JaxStatsModels** (`app/ml/xgb_model.py`) — XGBoost match scorer (0-100), tier predictor, and win predictor
    - **GPI** (`app/ml/gpi.py`) — 8-skill Gamer Performance Index scoring (farming, vision, aggression, fighting, survivability, objectives, consistency, versatility)

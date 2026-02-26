@@ -6,7 +6,7 @@ from fastapi.templating import Jinja2Templates
 from fastapi.responses import HTMLResponse
 from fastapi.requests import Request
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from typing import Optional, List, Dict
 import asyncio
 import uvicorn
@@ -64,10 +64,58 @@ templates = Jinja2Templates(directory="app/templates")
 # Store debug logs
 debug_logs = []
 
+VALID_REGIONS = {
+    "na1", "br1", "la1", "la2",
+    "euw1", "eun1", "tr1", "ru",
+    "kr", "jp1",
+    "oc1", "sg2", "tw2", "vn2",
+}
+
+
+def _validate_summoner_name(name: str) -> str:
+    """Validate and normalize a summoner name in GameName#TAG format."""
+    name = name.strip()
+    if '#' not in name:
+        raise ValueError("Summoner name must be in the format 'GameName#TAG' (e.g., 'Player#NA1')")
+    game_name, tag_line = name.split('#', 1)
+    if not game_name or not tag_line:
+        raise ValueError("Both game name and tag line are required (e.g., 'Player#NA1')")
+    if len(game_name) > 16:
+        raise ValueError("Game name must be 16 characters or fewer")
+    if len(tag_line) > 5:
+        raise ValueError("Tag line must be 5 characters or fewer")
+    return name
+
+
+def _validate_region(region: str) -> str:
+    """Validate a region code."""
+    region = region.strip().lower()
+    if region not in VALID_REGIONS:
+        raise ValueError(f"Invalid region '{region}'. Valid regions: {', '.join(sorted(VALID_REGIONS))}")
+    return region
+
+
 class SummonerRequest(BaseModel):
     summoner_name: str
     region: str
     match_count: int = 5
+
+    @field_validator("summoner_name")
+    @classmethod
+    def validate_summoner_name(cls, v: str) -> str:
+        return _validate_summoner_name(v)
+
+    @field_validator("region")
+    @classmethod
+    def validate_region(cls, v: str) -> str:
+        return _validate_region(v)
+
+    @field_validator("match_count")
+    @classmethod
+    def validate_match_count(cls, v: int) -> int:
+        if v < 1 or v > 20:
+            raise ValueError("Match count must be between 1 and 20")
+        return v
 
 class DebugLog(BaseModel):
     timestamp: str
@@ -82,6 +130,23 @@ class CompareRequest(BaseModel):
     summoner2_name: str
     summoner2_region: str
     match_count: int = 5
+
+    @field_validator("summoner1_name", "summoner2_name")
+    @classmethod
+    def validate_summoner_names(cls, v: str) -> str:
+        return _validate_summoner_name(v)
+
+    @field_validator("summoner1_region", "summoner2_region")
+    @classmethod
+    def validate_regions(cls, v: str) -> str:
+        return _validate_region(v)
+
+    @field_validator("match_count")
+    @classmethod
+    def validate_match_count(cls, v: int) -> int:
+        if v < 1 or v > 20:
+            raise ValueError("Match count must be between 1 and 20")
+        return v
 
 def log_debug(level: str, message: str, exc_info=None):
     """Log debug information with timestamp and stack trace."""
@@ -136,10 +201,10 @@ async def run_analysis(summoner_name: str, region: str = "na1", match_count: int
     """Shared analysis pipeline used by API endpoints and watchlist refreshes."""
     if match_count < 1 or match_count > 20:
         raise ValueError("Match count must be between 1 and 20")
-    if '#' not in summoner_name:
-        raise ValueError("Summoner name must be in the format 'GameName#TAG'")
+    summoner_name = _validate_summoner_name(summoner_name)
+    region = _validate_region(region)
 
-    game_name, tag_line = summoner_name.split('#')
+    game_name, tag_line = summoner_name.split('#', 1)
     account = await riot_client.get_account_by_riot_id(game_name, tag_line, region)
     puuid = account['puuid']
     summoner = await riot_client.get_summoner_by_puuid(puuid, region)
@@ -263,10 +328,8 @@ async def analyze_summoner(summoner_name: str, region: str = "na1", match_count:
 async def get_gpi(summoner_name: str, region: str = "na1", match_count: int = 10):
     """Get full GPI (Gamer Performance Index) breakdown for a summoner."""
     try:
-        if '#' not in summoner_name:
-            raise ValueError("Summoner name must be in the format 'GameName#TAG'")
-
-        game_name, tag_line = summoner_name.split('#')
+        summoner_name = _validate_summoner_name(summoner_name)
+        game_name, tag_line = summoner_name.split('#', 1)
         account = await riot_client.get_account_by_riot_id(game_name, tag_line, region)
         puuid = account['puuid']
 
@@ -315,10 +378,8 @@ async def get_match_timeline(match_id: str, region: str = "na1"):
 async def get_live_game(summoner_name: str, region: str = "na1"):
     """Get live game data for a summoner currently in game."""
     try:
-        if '#' not in summoner_name:
-            raise ValueError("Summoner name must be in the format 'GameName#TAG'")
-
-        game_name, tag_line = summoner_name.split('#')
+        summoner_name = _validate_summoner_name(summoner_name)
+        game_name, tag_line = summoner_name.split('#', 1)
         account = await riot_client.get_account_by_riot_id(game_name, tag_line, region)
         puuid = account['puuid']
 
@@ -386,10 +447,8 @@ async def get_champion_stats(summoner_name: str, region: str = "na1", match_coun
         if match_count < 1 or match_count > 20:
             raise ValueError("Match count must be between 1 and 20")
 
-        if '#' not in summoner_name:
-            raise ValueError("Summoner name must be in the format 'GameName#TAG'")
-
-        game_name, tag_line = summoner_name.split('#')
+        summoner_name = _validate_summoner_name(summoner_name)
+        game_name, tag_line = summoner_name.split('#', 1)
 
         account = await riot_client.get_account_by_riot_id(game_name, tag_line, region)
         puuid = account['puuid']
@@ -458,9 +517,36 @@ class WatchlistAddRequest(BaseModel):
     match_count: int = 20
     snapshot_mode: str = "daily"
 
+    @field_validator("name")
+    @classmethod
+    def validate_name(cls, v: str) -> str:
+        return _validate_summoner_name(v)
+
+    @field_validator("region")
+    @classmethod
+    def validate_region(cls, v: str) -> str:
+        return _validate_region(v)
+
+    @field_validator("match_count")
+    @classmethod
+    def validate_match_count(cls, v: int) -> int:
+        if v < 1 or v > 20:
+            raise ValueError("Match count must be between 1 and 20")
+        return v
+
 class WatchlistRemoveRequest(BaseModel):
     name: str
     region: str = "na1"
+
+    @field_validator("name")
+    @classmethod
+    def validate_name(cls, v: str) -> str:
+        return _validate_summoner_name(v)
+
+    @field_validator("region")
+    @classmethod
+    def validate_region(cls, v: str) -> str:
+        return _validate_region(v)
 
 class WatchlistRefreshRequest(BaseModel):
     name: Optional[str] = None

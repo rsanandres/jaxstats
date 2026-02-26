@@ -1,6 +1,7 @@
 import os
 import aiohttp
 import json
+import logging
 from typing import Dict, List, Optional
 from dotenv import load_dotenv
 from pathlib import Path
@@ -10,6 +11,14 @@ from fastapi import HTTPException
 # Try to load .env file from project root
 env_path = Path(__file__).parent.parent.parent / '.env'
 load_dotenv(dotenv_path=env_path)
+
+logger = logging.getLogger(__name__)
+
+# Maximum number of retries for rate-limited or transient errors
+MAX_RETRIES = 3
+# Default timeout for API requests (seconds)
+REQUEST_TIMEOUT = 15
+
 
 class RiotAPIClient:
     def __init__(self):
@@ -21,11 +30,11 @@ class RiotAPIClient:
                 "1. Create a .env file in the project root with RIOT_API_KEY=your_key\n"
                 "2. Run 'export RIOT_API_KEY=your_key' in your terminal"
             )
-        
+
         # Create data directory if it doesn't exist
         self.data_dir = Path("data")
         self.data_dir.mkdir(exist_ok=True)
-        
+
         # Base URLs for different routing values
         self.region_routing = {
             # Americas routing
@@ -33,24 +42,24 @@ class RiotAPIClient:
             'br1': 'americas',  # Brazil
             'la1': 'americas',  # Latin America North
             'la2': 'americas',  # Latin America South
-            
+
             # Europe routing
             'euw1': 'europe',   # Europe West
             'eun1': 'europe',   # Europe Nordic & East
             'tr1': 'europe',    # Turkey
             'ru': 'europe',     # Russia
-            
+
             # Asia routing
             'kr': 'asia',       # Korea
             'jp1': 'asia',      # Japan
-            
+
             # SEA routing
             'oc1': 'sea',       # Oceania
             'sg2': 'sea',       # Singapore
             'tw2': 'sea',       # Taiwan
             'vn2': 'sea'        # Vietnam
         }
-        
+
         self.base_urls = {
             'americas': 'https://americas.api.riotgames.com',
             'europe': 'https://europe.api.riotgames.com',
@@ -62,36 +71,66 @@ class RiotAPIClient:
         """Get the routing value for a given region."""
         routing = self.region_routing.get(region.lower())
         if not routing:
-            raise ValueError(f"Invalid region: {region}")
+            raise ValueError(f"Invalid region: {region}. Valid regions: {', '.join(sorted(self.region_routing.keys()))}")
         return routing
 
-    async def _make_request(self, url: str, headers: Dict[str, str]) -> Dict:
-        """Make a request to the Riot API with rate limit handling."""
-        async with aiohttp.ClientSession() as session:
+    async def _make_request(self, url: str, headers: Dict[str, str], _retry: int = 0) -> Dict:
+        """Make a request to the Riot API with rate limit handling and retries.
+
+        Retries up to MAX_RETRIES times for rate-limit (429) and server errors (500-503).
+        Respects the Retry-After header when present.
+        """
+        timeout = aiohttp.ClientTimeout(total=REQUEST_TIMEOUT)
+        async with aiohttp.ClientSession(timeout=timeout) as session:
             try:
                 async with session.get(url, headers=headers) as response:
                     if response.status == 200:
                         return await response.json()
-                    elif response.status == 404:
-                        error_text = await response.text()
-                        print(f"Resource not found. Failed URL: {url}. Response: {error_text}")
+
+                    error_text = await response.text()
+
+                    if response.status == 404:
+                        logger.warning("Resource not found: %s", url)
                         raise HTTPException(status_code=404, detail=f"Resource not found: {error_text}")
-                    elif response.status == 429:  # Rate limit exceeded
-                        error_text = await response.text()
-                        print(f"Rate limit exceeded. Waiting 120 seconds before retrying. Failed URL: {url}")
-                        await asyncio.sleep(120)  # Wait for 2 minutes
-                        return await self._make_request(url, headers)  # Retry the request
-                    elif response.status == 403:
-                        error_text = await response.text()
-                        print(f"API key invalid or expired. Failed URL: {url}. Response: {error_text}")
-                        raise HTTPException(status_code=403, detail="API key invalid or expired")
-                    else:
-                        error_text = await response.text()
-                        print(f"API request failed with status {response.status}. Failed URL: {url}. Response: {error_text}")
-                        raise HTTPException(status_code=response.status, detail=f"API request failed: {error_text}")
+
+                    if response.status == 403:
+                        logger.error("API key invalid or expired: %s", url)
+                        raise HTTPException(status_code=403, detail="API key invalid or expired. Check your RIOT_API_KEY.")
+
+                    if response.status == 429:
+                        if _retry >= MAX_RETRIES:
+                            logger.error("Rate limit exceeded after %d retries: %s", MAX_RETRIES, url)
+                            raise HTTPException(status_code=429, detail="Rate limit exceeded. Please try again later.")
+                        retry_after = int(response.headers.get("Retry-After", 120))
+                        logger.warning("Rate limited on %s, retrying in %ds (attempt %d/%d)", url, retry_after, _retry + 1, MAX_RETRIES)
+                        await asyncio.sleep(retry_after)
+                        return await self._make_request(url, headers, _retry=_retry + 1)
+
+                    if response.status in (500, 502, 503) and _retry < MAX_RETRIES:
+                        wait = 2 ** (_retry + 1)
+                        logger.warning("Server error %d on %s, retrying in %ds (attempt %d/%d)", response.status, url, wait, _retry + 1, MAX_RETRIES)
+                        await asyncio.sleep(wait)
+                        return await self._make_request(url, headers, _retry=_retry + 1)
+
+                    logger.error("API request failed with status %d: %s — %s", response.status, url, error_text)
+                    raise HTTPException(status_code=response.status, detail=f"Riot API error ({response.status}): {error_text}")
+
             except aiohttp.ClientError as e:
-                print(f"Request failed: {str(e)}")
-                raise HTTPException(status_code=500, detail=f"Request failed: {str(e)}")
+                if _retry < MAX_RETRIES:
+                    wait = 2 ** (_retry + 1)
+                    logger.warning("Network error on %s: %s, retrying in %ds (attempt %d/%d)", url, e, wait, _retry + 1, MAX_RETRIES)
+                    await asyncio.sleep(wait)
+                    return await self._make_request(url, headers, _retry=_retry + 1)
+                logger.error("Network error after %d retries on %s: %s", MAX_RETRIES, url, e)
+                raise HTTPException(status_code=502, detail=f"Failed to connect to Riot API: {e}")
+            except asyncio.TimeoutError:
+                if _retry < MAX_RETRIES:
+                    wait = 2 ** (_retry + 1)
+                    logger.warning("Timeout on %s, retrying in %ds (attempt %d/%d)", url, wait, _retry + 1, MAX_RETRIES)
+                    await asyncio.sleep(wait)
+                    return await self._make_request(url, headers, _retry=_retry + 1)
+                logger.error("Timeout after %d retries on %s", MAX_RETRIES, url)
+                raise HTTPException(status_code=504, detail="Riot API request timed out. Please try again.")
 
     def _save_match_data(self, match_id: str, data: Dict):
         """Save match data to a JSON file."""
@@ -103,8 +142,12 @@ class RiotAPIClient:
         """Load match data from a JSON file if it exists."""
         match_file = self.data_dir / f"match_{match_id}.json"
         if match_file.exists():
-            with open(match_file, 'r') as f:
-                return json.load(f)
+            try:
+                with open(match_file, 'r') as f:
+                    return json.load(f)
+            except (json.JSONDecodeError, OSError) as e:
+                logger.warning("Corrupt cache file for %s, ignoring: %s", match_id, e)
+                return None
         return None
 
     async def get_match_details(self, match_id: str, region: str) -> Optional[Dict]:
@@ -120,7 +163,7 @@ class RiotAPIClient:
             "X-Riot-Token": self.api_key
         }
         data = await self._make_request(url, headers)
-        
+
         if data:
             self._save_match_data(match_id, data)
         return data
